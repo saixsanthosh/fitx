@@ -1,0 +1,572 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
+package com.fitx.app.ui.screens
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsBike
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.fitx.app.domain.model.ActivityType
+import com.fitx.app.ui.components.MetricCard
+import com.fitx.app.ui.viewmodel.ActivityViewModel
+import com.fitx.app.util.BatteryOptimizationHelper
+import com.fitx.app.util.DateUtils
+import com.fitx.app.util.PermissionUtils
+
+@Composable
+fun ActivityStartRoute(
+    viewModel: ActivityViewModel = hiltViewModel(),
+    onOpenLive: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val state by viewModel.trackingState.collectAsStateWithLifecycle()
+    var selectedType by remember { mutableStateOf(ActivityType.WALKING) }
+    val hasLocation = PermissionUtils.hasLocationPermissions(context)
+    val hasSteps = PermissionUtils.hasActivityRecognitionPermission(context)
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        if (granted.values.all { it }) {
+            viewModel.startTracking(selectedType)
+            onOpenLive()
+        }
+    }
+
+    FitxScreenScaffold(topBar = { ScreenTopBar("Cycling & Walking", onBack) }) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(26.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)
+                                    )
+                                )
+                            )
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("Start New Session", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Track distance, speed, calories and steps with GPS + sensors.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (state.isTracking) {
+                            Text(
+                                "Session already running: ${state.activityType.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                                color = MaterialTheme.colorScheme.secondary,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActivityTypeCard(
+                        title = "Walking",
+                        subtitle = "Step-friendly mode",
+                        selected = selectedType == ActivityType.WALKING,
+                        icon = Icons.AutoMirrored.Filled.DirectionsWalk,
+                        onClick = { selectedType = ActivityType.WALKING },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ActivityTypeCard(
+                        title = "Cycling",
+                        subtitle = "GPS speed mode",
+                        selected = selectedType == ActivityType.CYCLING,
+                        icon = Icons.AutoMirrored.Filled.DirectionsBike,
+                        onClick = { selectedType = ActivityType.CYCLING },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PermissionChipCard(
+                        title = "Location",
+                        ok = hasLocation,
+                        modifier = Modifier.weight(1f)
+                    )
+                    PermissionChipCard(
+                        title = "Activity Sensor",
+                        ok = hasSteps,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                Button(
+                    onClick = {
+                        if (hasLocation && hasSteps) {
+                            viewModel.startTracking(selectedType)
+                            onOpenLive()
+                        } else {
+                            permissionsLauncher.launch(requiredTrackingPermissions())
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Text("Start ${selectedType.name.lowercase().replaceFirstChar { it.uppercase() }} Session")
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(
+                        onClick = onOpenHistory,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null)
+                        Text("History")
+                    }
+                    FilledTonalButton(
+                        onClick = { BatteryOptimizationHelper.requestIgnoreOptimization(context) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Battery Safe")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveTrackingRoute(
+    viewModel: ActivityViewModel = hiltViewModel(),
+    onStop: () -> Unit,
+    onBack: () -> Unit
+) {
+    val state by viewModel.trackingState.collectAsStateWithLifecycle()
+    val distanceKm = state.distanceMeters / 1000.0
+    val speedKmh = state.averageSpeedMps * 3.6
+    val distanceGoalKm = if (state.activityType == ActivityType.WALKING) 5.0 else 20.0
+    val progress = (distanceKm / distanceGoalKm).toFloat().coerceIn(0f, 1f)
+    val pulse = rememberTrackingPulse(state.isTracking)
+
+    FitxScreenScaffold(topBar = { ScreenTopBar("Live Tracking", onBack) }) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+                                    )
+                                )
+                            )
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                state.activityType.name.lowercase().replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size((14.dp.value * pulse).dp)
+                                    .background(
+                                        if (state.isTracking) Color(0xFF22C55E) else MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(50)
+                                    )
+                            )
+                        }
+                        Text(
+                            DateUtils.formatDuration(state.durationSeconds),
+                            style = MaterialTheme.typography.displayMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "${"%.2f".format(distanceKm)} / ${"%.1f".format(distanceGoalKm)} km goal",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActivityMiniMetric(
+                        icon = Icons.Default.LocationOn,
+                        title = "Distance",
+                        value = "${"%.2f".format(distanceKm)} km",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ActivityMiniMetric(
+                        icon = Icons.Default.Speed,
+                        title = "Speed",
+                        value = "${"%.2f".format(speedKmh)} km/h",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActivityMiniMetric(
+                        icon = Icons.Default.LocalFireDepartment,
+                        title = "Calories",
+                        value = "${state.caloriesBurned} kcal",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ActivityMiniMetric(
+                        icon = Icons.AutoMirrored.Filled.DirectionsWalk,
+                        title = "Steps",
+                        value = state.steps.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                MetricCard(
+                    title = "GPS Path Points",
+                    value = state.pathPoints.size.toString(),
+                    subtitle = "Live points captured"
+                )
+            }
+
+            item {
+                Button(
+                    onClick = {
+                        viewModel.stopTracking()
+                        onStop()
+                    },
+                    enabled = state.isTracking,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Stop Session")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ActivityHistoryRoute(
+    viewModel: ActivityViewModel = hiltViewModel(),
+    onSessionClick: (Long) -> Unit,
+    onBack: () -> Unit
+) {
+    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    FitxScreenScaffold(topBar = { ScreenTopBar("Activity History", onBack) }) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (sessions.isEmpty()) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
+                        )
+                    ) {
+                        Text(
+                            "No sessions yet. Start a walking or cycling session first.",
+                            modifier = Modifier.padding(14.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            items(sessions, key = { it.sessionId }) { session ->
+                val accent = if (session.activityType == ActivityType.WALKING) Color(0xFF22C55E) else Color(0xFF38BDF8)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    onClick = { onSessionClick(session.sessionId) }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        accent.copy(alpha = 0.16f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                                    )
+                                )
+                            )
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(session.activityType.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "${"%.2f".format(session.distanceMeters / 1000)} km  •  ${DateUtils.formatDuration(session.durationSeconds)}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "${session.caloriesBurned} kcal  •  ${session.steps} steps  •  ${"%.2f".format(session.averageSpeedMps * 3.6)} km/h",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SessionDetailRoute(
+    viewModel: ActivityViewModel,
+    onBack: () -> Unit
+) {
+    val detail by viewModel.selectedSessionDetail.collectAsStateWithLifecycle()
+    FitxScreenScaffold(topBar = { ScreenTopBar("Session Details", onBack) }) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (detail == null) {
+                item { Text("Loading...", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            } else {
+                val session = detail!!.session
+                item {
+                    MetricCard("Activity", session.activityType.name)
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricCard(
+                            "Distance",
+                            "${"%.2f".format(session.distanceMeters / 1000)} km",
+                            modifier = Modifier.weight(1f)
+                        )
+                        MetricCard(
+                            "Duration",
+                            DateUtils.formatDuration(session.durationSeconds),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricCard(
+                            "Avg Speed",
+                            "${"%.2f".format(session.averageSpeedMps * 3.6)} km/h",
+                            modifier = Modifier.weight(1f)
+                        )
+                        MetricCard(
+                            "Calories",
+                            "${session.caloriesBurned} kcal",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                item {
+                    MetricCard("Steps", session.steps.toString(), "GPS points ${detail!!.points.size}")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityTypeCard(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Card(
+        modifier = modifier,
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) {
+                colors.primary.copy(alpha = 0.18f)
+            } else {
+                colors.surfaceVariant.copy(alpha = 0.9f)
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = if (selected) colors.primary else colors.onSurfaceVariant)
+            Text(title, fontWeight = FontWeight.Bold, color = colors.onSurface)
+            Text(subtitle, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun PermissionChipCard(
+    title: String,
+    ok: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val accent = if (ok) Color(0xFF22C55E) else colors.secondary
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, color = colors.onSurface)
+            FilterChip(
+                selected = ok,
+                onClick = {},
+                enabled = false,
+                label = { Text(if (ok) "Ready" else "Needed") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (ok) Icons.Default.PlayArrow else Icons.Default.History,
+                        contentDescription = null,
+                        tint = accent
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivityMiniMetric(
+    icon: ImageVector,
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = colors.tertiary)
+            Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colors.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun rememberTrackingPulse(isTracking: Boolean): Float {
+    val transition = rememberInfiniteTransition(label = "live_pulse")
+    val scale by transition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
+    return if (isTracking) scale else 1f
+}

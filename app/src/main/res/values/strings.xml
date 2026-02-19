@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fitx</string>
+    <string name="tracking_channel_name">Activity Tracking</string>
+    <string name="tracking_channel_description">Foreground tracking for walking and cycling sessions</string>
+    <string name="reminder_channel_name">Daily Reminders</string>
+    <string name="reminder_channel_description">Weight and hydration reminders</string>
+</resources>
+

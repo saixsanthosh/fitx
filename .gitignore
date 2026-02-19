@@ -1,0 +1,27 @@
+﻿# Android / Gradle
+.gradle/
+**/build/
+app/build/
+
+# IDE
+.idea/
+*.iml
+
+# Local machine config
+local.properties
+
+# Firebase / secrets
+app/google-services.json
+google-services.json
+
+# Signing secrets
+keystore.properties
+*.jks
+*.keystore
+
+# Release artifacts (uploaded to GitHub Releases, not committed)
+release-artifacts/
+
+# OS files
+.DS_Store
+Thumbs.db
