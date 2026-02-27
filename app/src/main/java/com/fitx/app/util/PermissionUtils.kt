@@ -3,6 +3,8 @@ package com.fitx.app.util
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
@@ -39,6 +41,11 @@ object PermissionUtils {
         } else {
             true
         }
+    }
+
+    fun hasStepCounterSensor(context: Context): Boolean {
+        val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager ?: return false
+        return manager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null
     }
 }
 

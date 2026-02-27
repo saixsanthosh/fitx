@@ -83,11 +83,22 @@ fun ActivityStartRoute(
     val state by viewModel.trackingState.collectAsStateWithLifecycle()
     var selectedType by remember { mutableStateOf(ActivityType.WALKING) }
     val hasLocation = PermissionUtils.hasLocationPermissions(context)
-    val hasSteps = PermissionUtils.hasActivityRecognitionPermission(context)
+    val hasStepSensor = PermissionUtils.hasStepCounterSensor(context)
+    val hasSteps = if (hasStepSensor) {
+        PermissionUtils.hasActivityRecognitionPermission(context)
+    } else {
+        true
+    }
     val permissionsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { granted ->
-        if (granted.values.all { it }) {
+    ) {
+        val hasLocationNow = PermissionUtils.hasLocationPermissions(context)
+        val hasStepsNow = if (hasStepSensor) {
+            PermissionUtils.hasActivityRecognitionPermission(context)
+        } else {
+            true
+        }
+        if (hasLocationNow && hasStepsNow) {
             viewModel.startTracking(selectedType)
             onOpenLive()
         }
@@ -141,7 +152,16 @@ fun ActivityStartRoute(
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PermissionChipCard("Location", hasLocation, Modifier.weight(1f))
-                    PermissionChipCard("Activity Sensor", hasSteps, Modifier.weight(1f))
+                    PermissionChipCard(if (hasStepSensor) "Activity Sensor" else "Steps Optional", hasSteps, Modifier.weight(1f))
+                }
+            }
+            if (!hasStepSensor) {
+                item {
+                    Text(
+                        "Step sensor not available on this phone. Distance and GPS tracking still work.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
             item {
@@ -151,7 +171,7 @@ fun ActivityStartRoute(
                             viewModel.startTracking(selectedType)
                             onOpenLive()
                         } else {
-                            permissionsLauncher.launch(requiredTrackingPermissions())
+                            permissionsLauncher.launch(requiredTrackingPermissions(includeActivityRecognition = hasStepSensor))
                         }
                     },
                     modifier = Modifier.fillMaxWidth()

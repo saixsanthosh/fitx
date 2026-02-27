@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +35,8 @@ import com.google.android.gms.common.api.ApiException
 
 @Composable
 fun AuthRoute(
-    viewModel: AuthViewModel = hiltViewModel()
+    viewModel: AuthViewModel = hiltViewModel(),
+    onContinueOffline: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -120,6 +122,17 @@ fun AuthRoute(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Continue with Google")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.clearError()
+                            onContinueOffline()
+                        },
+                        enabled = !uiState.loading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Continue Offline")
                     }
 
                     if (webClientId.isNullOrBlank()) {

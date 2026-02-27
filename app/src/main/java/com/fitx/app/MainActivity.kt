@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val updateInfo = updateState.availableUpdate
             var showSplash by rememberSaveable { mutableStateOf(true) }
+            var continueOffline by rememberSaveable { mutableStateOf(false) }
             val onDownloadUpdate = remember(appUpdateViewModel, context) {
                 { url: String ->
                     openExternalUrl(context, url)
@@ -52,8 +53,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(showSplash, authUser?.uid) {
-                if (!showSplash && authUser != null) {
+            LaunchedEffect(showSplash, authUser?.uid, continueOffline) {
+                if (!showSplash && (authUser != null || continueOffline)) {
                     appUpdateViewModel.checkOnce()
                 }
             }
@@ -66,8 +67,11 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (showSplash) {
                         FitxSplash(onFinished = { showSplash = false })
-                    } else if (authUser == null) {
-                        AuthRoute(viewModel = authViewModel)
+                    } else if (authUser == null && !continueOffline) {
+                        AuthRoute(
+                            viewModel = authViewModel,
+                            onContinueOffline = { continueOffline = true }
+                        )
                     } else {
                         FitxNavGraph()
                     }

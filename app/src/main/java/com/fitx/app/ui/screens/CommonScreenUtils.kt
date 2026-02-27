@@ -153,16 +153,13 @@ fun <T> EnumSelector(
     }
 }
 
-fun requiredTrackingPermissions(): Array<String> {
+fun requiredTrackingPermissions(includeActivityRecognition: Boolean = true): Array<String> {
     val permissions = mutableListOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    if (includeActivityRecognition && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         permissions += Manifest.permission.ACTIVITY_RECOGNITION
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        permissions += Manifest.permission.POST_NOTIFICATIONS
     }
     return permissions.toTypedArray()
 }
