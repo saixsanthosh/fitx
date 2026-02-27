@@ -97,11 +97,13 @@ fun AuthRoute(
                     Text(
                         text = "Welcome to Fitx",
                         style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "Sign in with Google to sync your profile and continue.",
                         style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
 
