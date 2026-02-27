@@ -409,6 +409,17 @@ fun ActivityFinishRoute(
     var hapticDoneForSession by rememberSaveable { mutableStateOf(0L) }
 
     val latestSession = sessions.firstOrNull()
+    val summaryMessage = latestSession?.let { buildAppreciationMessage(it) }
+    val primaryTarget = latestSession?.let {
+        if (it.activityType == ActivityType.CYCLING) it.averageSpeedMps * 3.6 else it.distanceMeters / 1000.0
+    } ?: 0.0
+    val animatedPrimary by animateFloatAsState(
+        targetValue = primaryTarget.toFloat(),
+        animationSpec = tween(durationMillis = 780, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "primary_count_up"
+    )
+    val pulse = rememberPrimaryPulse()
+
     LaunchedEffect(latestSession?.sessionId) {
         if (latestSession != null) viewModel.loadSession(latestSession.sessionId)
     }
@@ -431,14 +442,6 @@ fun ActivityFinishRoute(
             if (latestSession == null) {
                 item { MetricCard("No session found", "Start a new walk or ride", "Your next completed session will appear here.") }
             } else {
-                val summaryMessage = buildAppreciationMessage(latestSession)
-                val primaryTarget = if (latestSession.activityType == ActivityType.CYCLING) latestSession.averageSpeedMps * 3.6 else latestSession.distanceMeters / 1000.0
-                val animatedPrimary by animateFloatAsState(
-                    targetValue = primaryTarget.toFloat(),
-                    animationSpec = tween(durationMillis = 780, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                    label = "primary_count_up"
-                )
-                val pulse = rememberPrimaryPulse()
                 item {
                     Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(
@@ -456,7 +459,7 @@ fun ActivityFinishRoute(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text("Great work", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(summaryMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(summaryMessage.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 text = if (latestSession.activityType == ActivityType.CYCLING) "${"%.2f".format(animatedPrimary)} km/h avg" else "${"%.2f".format(animatedPrimary)} km",
                                 style = MaterialTheme.typography.displaySmall,

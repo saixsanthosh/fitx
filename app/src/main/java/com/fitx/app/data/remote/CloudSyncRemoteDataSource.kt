@@ -13,16 +13,21 @@ import kotlinx.coroutines.tasks.await
 
 @Singleton
 class CloudSyncRemoteDataSource @Inject constructor(
-    private val firebaseAuth: FirebaseAuth,
-    private val firestore: FirebaseFirestore,
+    private val firebaseAuth: FirebaseAuth?,
+    private val firestore: FirebaseFirestore?,
     private val gson: Gson
 ) {
     suspend fun push(operation: SyncQueueEntity): Result<Unit> {
-        val uid = firebaseAuth.currentUser?.uid
+        val auth = firebaseAuth
+        val store = firestore
+        if (auth == null || store == null) {
+            return Result.failure(IllegalStateException("No authenticated user"))
+        }
+        val uid = auth.currentUser?.uid
             ?: return Result.failure(IllegalStateException("No authenticated user"))
 
         return runCatching {
-            val docRef = firestore
+            val docRef = store
                 .collection("users")
                 .document(uid)
                 .collection(operation.entityType)

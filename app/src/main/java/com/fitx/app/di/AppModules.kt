@@ -37,6 +37,7 @@ import com.fitx.app.domain.repository.SettingsRepository
 import com.fitx.app.domain.repository.UserProfileRepository
 import com.fitx.app.domain.repository.WeightRepository
 import com.fitx.app.domain.repository.WorkoutRepository
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
@@ -148,11 +149,21 @@ object DataStoreModule {
 object FirebaseModule {
     @Provides
     @Singleton
-    fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+    fun provideFirebaseAuth(@ApplicationContext context: Context): FirebaseAuth? {
+        return runCatching {
+            val app = FirebaseApp.getApps(context).firstOrNull() ?: FirebaseApp.initializeApp(context)
+            app?.let { FirebaseAuth.getInstance(it) }
+        }.getOrNull()
+    }
 
     @Provides
     @Singleton
-    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
+    fun provideFirebaseFirestore(@ApplicationContext context: Context): FirebaseFirestore? {
+        return runCatching {
+            val app = FirebaseApp.getApps(context).firstOrNull() ?: FirebaseApp.initializeApp(context)
+            app?.let { FirebaseFirestore.getInstance(it) }
+        }.getOrNull()
+    }
 }
 
 @Module

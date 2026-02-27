@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
@@ -571,30 +572,36 @@ class SettingsRepositoryImpl @Inject constructor(
 
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
-    private val firebaseAuth: FirebaseAuth
+    private val firebaseAuth: FirebaseAuth?
 ) : AuthRepository {
 
-    override fun observeCurrentUser(): Flow<AuthUser?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { auth ->
+    override fun observeCurrentUser(): Flow<AuthUser?> {
+        val auth = firebaseAuth ?: return flowOf(null)
+        return callbackFlow {
+            val listener = FirebaseAuth.AuthStateListener { firebase ->
+                trySend(firebase.currentUser?.toDomain())
+            }
+            auth.addAuthStateListener(listener)
             trySend(auth.currentUser?.toDomain())
-        }
-        firebaseAuth.addAuthStateListener(listener)
-        trySend(firebaseAuth.currentUser?.toDomain())
-        awaitClose {
-            firebaseAuth.removeAuthStateListener(listener)
+            awaitClose {
+                auth.removeAuthStateListener(listener)
+            }
         }
     }
 
     override suspend fun signInWithGoogleIdToken(idToken: String): Result<AuthUser> {
+        val auth = firebaseAuth ?: return Result.failure(
+            IllegalStateException("Firebase is not configured on this build.")
+        )
         return runCatching {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
-            val authResult = firebaseAuth.signInWithCredential(credential).await()
+            val authResult = auth.signInWithCredential(credential).await()
             authResult.user?.toDomain() ?: error("Unable to complete Google sign-in.")
         }
     }
 
     override suspend fun signOut() {
-        firebaseAuth.signOut()
+        firebaseAuth?.signOut()
     }
 }
 

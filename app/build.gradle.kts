@@ -9,7 +9,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
     id("com.google.dagger.hilt.android")
-    id("com.google.gms.google-services")
+    id("com.google.gms.google-services") apply false
 }
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -23,6 +23,7 @@ val hasReleaseSigning =
         keystoreProperties.getProperty("storePassword")?.isNotBlank() == true &&
         keystoreProperties.getProperty("keyAlias")?.isNotBlank() == true &&
         keystoreProperties.getProperty("keyPassword")?.isNotBlank() == true
+val hasGoogleServicesConfig = file("google-services.json").exists()
 
 android {
     namespace = "com.fitx.app"
@@ -103,6 +104,12 @@ android {
     }
 }
 
+if (hasGoogleServicesConfig) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle("google-services.json not found. Building Fitx without Firebase Google Services plugin.")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
@@ -147,7 +154,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore-ktx")
 
