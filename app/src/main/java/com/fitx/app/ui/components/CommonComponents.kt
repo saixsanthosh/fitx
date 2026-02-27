@@ -1,7 +1,11 @@
 package com.fitx.app.ui.components
 
+import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,15 +19,27 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.fitx.app.domain.model.ActivityPoint
+import androidx.compose.ui.viewinterop.AndroidView
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 
 @Composable
 fun MetricCard(
@@ -36,9 +52,10 @@ fun MetricCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = colors.surface
+            containerColor = colors.surfaceVariant.copy(alpha = 0.92f)
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.22f))
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
@@ -76,7 +93,8 @@ fun WeightLineChart(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(colors.surface, shape = RoundedCornerShape(16.dp))
+            .border(1.dp, colors.outline.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
+            .background(colors.surfaceVariant.copy(alpha = 0.92f), shape = RoundedCornerShape(16.dp))
             .padding(14.dp)
     ) {
         Row(
@@ -122,54 +140,110 @@ fun RouteMapPreview(
     height: Dp = 180.dp
 ) {
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val geoPoints = remember(points) { points.map { GeoPoint(it.latitude, it.longitude) } }
+    val mapView = remember(context) { createRouteMapView(context) }
+
+    DisposableEffect(mapView) {
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onDetach()
+        }
+    }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface)
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.92f)),
+        border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Route Map", style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
-            Canvas(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(height)
                     .background(colors.surfaceVariant.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
-                    .padding(10.dp)
             ) {
-                drawRoutePath(points = points, lineColor = colors.primary)
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth(),
+                    factory = { mapView },
+                    update = { view ->
+                        updateRouteMap(view, geoPoints, colors.primary)
+                    }
+                )
+            }
+            if (geoPoints.isEmpty()) {
+                Text(
+                    "Start a session to draw your route.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant
+                )
             }
         }
     }
 }
 
-private fun DrawScope.drawRoutePath(points: List<ActivityPoint>, lineColor: Color) {
-    if (points.size < 2) return
+private fun createRouteMapView(context: Context): MapView {
+    Configuration.getInstance().userAgentValue = context.packageName
+    return MapView(context).apply {
+        setTileSource(TileSourceFactory.MAPNIK)
+        setMultiTouchControls(true)
+        minZoomLevel = 3.0
+        maxZoomLevel = 20.0
+        controller.setZoom(4.0)
+        controller.setCenter(GeoPoint(20.5937, 78.9629))
+    }
+}
 
-    val lats = points.map { it.latitude }
-    val lons = points.map { it.longitude }
-    val minLat = lats.minOrNull() ?: return
-    val maxLat = lats.maxOrNull() ?: return
-    val minLon = lons.minOrNull() ?: return
-    val maxLon = lons.maxOrNull() ?: return
-    val latRange = (maxLat - minLat).takeIf { it > 0.0 } ?: 1.0
-    val lonRange = (maxLon - minLon).takeIf { it > 0.0 } ?: 1.0
+private fun updateRouteMap(mapView: MapView, points: List<GeoPoint>, lineColor: Color) {
+    mapView.overlays.clear()
 
-    fun project(lat: Double, lon: Double): Offset {
-        val x = ((lon - minLon) / lonRange).toFloat() * size.width
-        val y = size.height - (((lat - minLat) / latRange).toFloat() * size.height)
-        return Offset(x, y)
+    if (points.isEmpty()) {
+        mapView.controller.setZoom(4.0)
+        mapView.controller.setCenter(GeoPoint(20.5937, 78.9629))
+        mapView.invalidate()
+        return
     }
 
-    val path = Path()
-    points.forEachIndexed { index, point ->
-        val p = project(point.latitude, point.longitude)
-        if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+    val routeLine = Polyline().apply {
+        outlinePaint.color = lineColor.toArgb()
+        outlinePaint.strokeWidth = 10f
+        setPoints(points)
+    }
+    mapView.overlays.add(routeLine)
+
+    val startMarker = Marker(mapView).apply {
+        position = points.first()
+        title = "Start"
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+    }
+    mapView.overlays.add(startMarker)
+
+    if (points.size > 1) {
+        val finishMarker = Marker(mapView).apply {
+            position = points.last()
+            title = "Finish"
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        }
+        mapView.overlays.add(finishMarker)
     }
 
-    val start = project(points.first().latitude, points.first().longitude)
-    val end = project(points.last().latitude, points.last().longitude)
+    if (points.size == 1) {
+        mapView.controller.setZoom(17.0)
+        mapView.controller.setCenter(points.first())
+    } else {
+        val latitudes = points.map { it.latitude }
+        val longitudes = points.map { it.longitude }
+        val bounds = BoundingBox(
+            latitudes.maxOrNull() ?: points.first().latitude,
+            longitudes.maxOrNull() ?: points.first().longitude,
+            latitudes.minOrNull() ?: points.first().latitude,
+            longitudes.minOrNull() ?: points.first().longitude
+        )
+        mapView.post { mapView.zoomToBoundingBox(bounds, true, 72) }
+    }
 
-    drawPath(path = path, color = lineColor, style = Stroke(width = 6f))
-    drawCircle(color = lineColor, radius = 8f, center = start)
-    drawCircle(color = lineColor.copy(alpha = 0.65f), radius = 8f, center = end)
+    mapView.invalidate()
 }

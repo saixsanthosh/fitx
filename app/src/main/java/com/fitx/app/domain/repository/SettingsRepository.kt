@@ -8,5 +8,7 @@ interface SettingsRepository {
     suspend fun setDarkTheme(enabled: Boolean)
     suspend fun setNotifications(enabled: Boolean)
     suspend fun setHaptics(enabled: Boolean)
+    suspend fun setSmartReminders(enabled: Boolean)
+    suspend fun setSmartReminderTuning(reminderHour: Int, hydrationIntervalHours: Int)
 }
 

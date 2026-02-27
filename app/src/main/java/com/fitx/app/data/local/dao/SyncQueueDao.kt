@@ -33,6 +33,9 @@ interface SyncQueueDao {
     @Query("SELECT COUNT(*) FROM sync_queue WHERE status = :status")
     fun observeCountByStatus(status: String): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM sync_queue WHERE status = :status")
+    suspend fun getCountByStatus(status: String): Int
+
     @Query("DELETE FROM sync_queue WHERE status = :status AND createdAtMillis < :olderThanMillis")
     suspend fun deleteByStatusOlderThan(status: String, olderThanMillis: Long): Int
 }

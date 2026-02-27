@@ -3,6 +3,7 @@ package com.fitx.app.ui.viewmodel
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitx.app.domain.model.ActivitySessionDetail
@@ -33,6 +34,7 @@ import com.fitx.app.domain.usecase.CalculateHealthMetricsUseCase
 import com.fitx.app.domain.usecase.ObserveDashboardUseCase
 import com.fitx.app.data.repository.SyncQueueRepository
 import com.fitx.app.service.ActivityTrackingService
+import com.fitx.app.service.AppMaintenanceManager
 import com.fitx.app.service.ReminderScheduler
 import com.fitx.app.service.TaskReminderScheduler
 import com.fitx.app.service.TrackingStore
@@ -42,19 +44,25 @@ import com.fitx.app.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.round
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsRepository,
+    private val plannerRepository: PlannerRepository,
     private val reminderScheduler: ReminderScheduler
 ) : ViewModel() {
     val settings: StateFlow<SettingsPreferences> = settingsRepository.observeSettings().stateIn(
@@ -64,9 +72,46 @@ class MainViewModel @Inject constructor(
     )
 
     init {
+        val today = DateUtils.todayEpochDay()
         viewModelScope.launch {
-            settings.collect { prefs ->
-                reminderScheduler.syncReminders(prefs.notificationsEnabled)
+            kotlinx.coroutines.flow.combine(
+                settingsRepository.observeSettings(),
+                plannerRepository.observeTasks(today)
+            ) { prefs, tasks ->
+                val pendingTasks = tasks.filterNot { it.isCompleted }
+                val timedTaskMinutes = pendingTasks
+                    .filter { it.reminderEnabled }
+                    .mapNotNull { it.timeMinutesOfDay }
+                val suggestedReminderHour = when {
+                    timedTaskMinutes.isNotEmpty() -> ((timedTaskMinutes.minOrNull() ?: 480) / 60 - 1).coerceIn(6, 22)
+                    pendingTasks.count { it.priority == TaskItem.PRIORITY_HIGH } >= 2 -> 7
+                    pendingTasks.isNotEmpty() -> 8
+                    else -> 9
+                }
+                val suggestedHydrationInterval = when {
+                    pendingTasks.size >= 8 -> 3
+                    pendingTasks.size >= 4 -> 4
+                    else -> 5
+                }
+                Triple(prefs, suggestedReminderHour, suggestedHydrationInterval)
+            }.collect { (prefs, suggestedReminderHour, suggestedHydrationInterval) ->
+                if (
+                    prefs.smartRemindersEnabled &&
+                    (prefs.smartReminderHour != suggestedReminderHour ||
+                        prefs.hydrationIntervalHours != suggestedHydrationInterval)
+                ) {
+                    settingsRepository.setSmartReminderTuning(
+                        reminderHour = suggestedReminderHour,
+                        hydrationIntervalHours = suggestedHydrationInterval
+                    )
+                }
+                val hour = if (prefs.smartRemindersEnabled) suggestedReminderHour else prefs.smartReminderHour
+                val interval = if (prefs.smartRemindersEnabled) suggestedHydrationInterval else prefs.hydrationIntervalHours
+                reminderScheduler.syncReminders(
+                    enabled = prefs.notificationsEnabled,
+                    weightReminderHour = hour,
+                    hydrationIntervalHours = interval
+                )
             }
         }
     }
@@ -87,7 +132,21 @@ class DashboardViewModel @Inject constructor(
             completedTasks = 0,
             todayDistanceMeters = 0.0,
             todayCaloriesBurned = 0,
-            todaySteps = 0
+            todaySteps = 0,
+            todayMealCalories = 0.0,
+            weeklyDistanceMeters = 0.0,
+            weeklyCaloriesBurned = 0,
+            weeklySteps = 0,
+            weeklySessionCount = 0,
+            weeklyActiveDays = 0,
+            weeklyWeightChangeKg = null,
+            todayScore = 0,
+            todayScoreBreakdown = com.fitx.app.domain.model.TodayScoreBreakdown(
+                activity = 0,
+                nutrition = 0,
+                tasks = 0,
+                consistency = 0
+            )
         )
     )
 }
@@ -479,6 +538,7 @@ class PlannerViewModel @Inject constructor(
     }
 }
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class NutritionViewModel @Inject constructor(
     private val nutritionRepository: NutritionRepository
@@ -486,6 +546,9 @@ class NutritionViewModel @Inject constructor(
     val offlineCatalogCount: Int = nutritionRepository.getOfflineCatalogCount()
     private var allFoodsPage: Int = 0
     private var allFoodsMode: Boolean = false
+    private var activeSearchJob: Job? = null
+    private var skipDebouncedQuery: String? = null
+    private val queryInput = MutableStateFlow("")
 
     private val _selectedDate = MutableStateFlow(DateUtils.todayEpochDay())
     val selectedDate: StateFlow<Long> = _selectedDate
@@ -499,6 +562,18 @@ class NutritionViewModel @Inject constructor(
     )
 
     val customFoods = nutritionRepository.observeCustomFoods().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
+    val favoriteFoods = nutritionRepository.observeFavoriteFoods().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
+    val recentFoods = nutritionRepository.observeRecentFoods().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList()
@@ -519,18 +594,56 @@ class NutritionViewModel @Inject constructor(
     private val _searchMessage = MutableStateFlow<String?>(null)
     val searchMessage: StateFlow<String?> = _searchMessage
 
+    private val _actionMessage = MutableStateFlow<String?>(null)
+    val actionMessage: StateFlow<String?> = _actionMessage
+
     init {
         loadAllFoods(reset = true)
+        viewModelScope.launch {
+            queryInput
+                .drop(1)
+                .debounce(350)
+                .distinctUntilChanged()
+                .collect { query ->
+                    val normalized = query.trim()
+                    if (skipDebouncedQuery == normalized) {
+                        skipDebouncedQuery = null
+                        return@collect
+                    }
+                    if (normalized.isBlank()) {
+                        loadAllFoods(reset = true)
+                    } else {
+                        performSearch(normalized)
+                    }
+                }
+        }
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        queryInput.value = query
     }
 
     fun searchFoods(query: String) {
-        if (query.isBlank()) {
+        searchFoodsNow(query)
+    }
+
+    fun searchFoodsNow(query: String) {
+        val normalized = query.trim()
+        skipDebouncedQuery = normalized
+        if (normalized.isBlank()) {
+            queryInput.value = ""
             loadAllFoods(reset = true)
             return
         }
+        queryInput.value = normalized
+        performSearch(normalized)
+    }
+
+    private fun performSearch(query: String) {
         allFoodsMode = false
         _canLoadMoreFoods.value = false
-        viewModelScope.launch {
+        activeSearchJob?.cancel()
+        activeSearchJob = viewModelScope.launch {
             _loading.value = true
             val result = runCatching { nutritionRepository.searchFoods(query) }
             _results.value = result.getOrElse { emptyList() }
@@ -544,6 +657,7 @@ class NutritionViewModel @Inject constructor(
     }
 
     fun loadAllFoods(reset: Boolean = true) {
+        activeSearchJob?.cancel()
         viewModelScope.launch {
             _loading.value = true
             allFoodsMode = true
@@ -602,6 +716,50 @@ class NutritionViewModel @Inject constructor(
         }
     }
 
+    fun findFoodByBarcode(barcode: String) {
+        val normalized = barcode.trim()
+        if (normalized.isBlank()) return
+        allFoodsMode = false
+        _canLoadMoreFoods.value = false
+        activeSearchJob?.cancel()
+        skipDebouncedQuery = normalized
+        queryInput.value = normalized
+        activeSearchJob = viewModelScope.launch {
+            _loading.value = true
+            val result = runCatching {
+                nutritionRepository.lookupFoodByBarcode(normalized)
+            }
+            val food = result.getOrNull()
+            if (food != null) {
+                _results.value = listOf(food)
+                _searchMessage.value = "Barcode matched: ${food.name}"
+            } else {
+                _results.value = emptyList()
+                _searchMessage.value = if (result.isFailure) {
+                    "Barcode lookup failed. Check internet or USDA key, then retry."
+                } else {
+                    "No USDA food found for barcode $normalized."
+                }
+            }
+            _loading.value = false
+        }
+    }
+
+    fun copyYesterdayMeals() {
+        viewModelScope.launch {
+            val today = _selectedDate.value
+            val copied = nutritionRepository.copyMeals(
+                fromEpochDay = today - 1,
+                toEpochDay = today
+            )
+            _actionMessage.value = if (copied > 0) {
+                "Copied $copied meals from yesterday."
+            } else {
+                "No meals found yesterday to copy."
+            }
+        }
+    }
+
     fun addFood(
         foodItem: FoodItem,
         mealType: String = "Meal",
@@ -614,6 +772,7 @@ class NutritionViewModel @Inject constructor(
             val proteinPer100 = (foodItem.protein / base) * 100.0
             val carbsPer100 = (foodItem.carbs / base) * 100.0
             val fatPer100 = (foodItem.fat / base) * 100.0
+            nutritionRepository.recordRecentFood(foodItem)
             nutritionRepository.addMeal(
                 MealEntry(
                     dateEpochDay = _selectedDate.value,
@@ -676,6 +835,7 @@ class NutritionViewModel @Inject constructor(
     fun addCustomFood(food: CustomFood, mealType: String = "Meal", grams: Double) {
         val safeGrams = grams.coerceAtLeast(1.0)
         viewModelScope.launch {
+            nutritionRepository.recordRecentFood(food.toFoodItem())
             nutritionRepository.addMeal(
                 MealEntry(
                     dateEpochDay = _selectedDate.value,
@@ -696,10 +856,28 @@ class NutritionViewModel @Inject constructor(
         addCustomFood(food = food, mealType = mealType, grams = serving.grams)
     }
 
+    fun toggleFavoriteFood(foodItem: FoodItem) {
+        viewModelScope.launch {
+            nutritionRepository.toggleFavoriteFood(foodItem)
+        }
+    }
+
     fun deleteMeal(mealEntryId: Long) {
         viewModelScope.launch {
             nutritionRepository.deleteMeal(mealEntryId)
         }
+    }
+
+    private fun CustomFood.toFoodItem(): FoodItem {
+        return FoodItem(
+            fdcId = id.hashCode().toLong(),
+            name = name,
+            calories = caloriesPer100g,
+            protein = proteinPer100g,
+            carbs = carbsPer100g,
+            fat = fatPer100g,
+            baseGrams = 100.0
+        )
     }
 
     private fun round1(value: Double): Double {
@@ -711,8 +889,10 @@ class NutritionViewModel @Inject constructor(
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val reminderScheduler: ReminderScheduler,
+    private val maintenanceManager: AppMaintenanceManager,
     private val syncQueueRepository: SyncQueueRepository,
-    private val cloudSyncScheduler: CloudSyncScheduler
+    private val cloudSyncScheduler: CloudSyncScheduler,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     val settings = settingsRepository.observeSettings().stateIn(
         scope = viewModelScope,
@@ -726,6 +906,9 @@ class SettingsViewModel @Inject constructor(
         initialValue = 0
     )
 
+    private val _systemMessage = MutableStateFlow<String?>(null)
+    val systemMessage: StateFlow<String?> = _systemMessage
+
     fun setTheme(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setDarkTheme(enabled)
@@ -735,7 +918,12 @@ class SettingsViewModel @Inject constructor(
     fun setNotifications(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setNotifications(enabled)
-            reminderScheduler.syncReminders(enabled)
+            val current = settings.value
+            reminderScheduler.syncReminders(
+                enabled = enabled,
+                weightReminderHour = current.smartReminderHour,
+                hydrationIntervalHours = current.hydrationIntervalHours
+            )
         }
     }
 
@@ -745,7 +933,79 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setSmartReminders(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSmartReminders(enabled)
+            val current = settings.value
+            reminderScheduler.syncReminders(
+                enabled = current.notificationsEnabled,
+                weightReminderHour = current.smartReminderHour,
+                hydrationIntervalHours = current.hydrationIntervalHours
+            )
+        }
+    }
+
     fun syncNow() {
         cloudSyncScheduler.syncNow()
+    }
+
+    fun exportBackup() {
+        viewModelScope.launch {
+            val result = runCatching { maintenanceManager.exportBackup() }
+            _systemMessage.value = result.fold(
+                onSuccess = { "Backup exported: ${it.name}" },
+                onFailure = { "Backup export failed: ${it.message.orEmpty()}" }
+            )
+        }
+    }
+
+    fun restoreLatestBackup() {
+        viewModelScope.launch {
+            val result = runCatching { maintenanceManager.restoreLatestBackup() }
+            _systemMessage.value = result.fold(
+                onSuccess = { it },
+                onFailure = { "Restore failed: ${it.message.orEmpty()}" }
+            )
+        }
+    }
+
+    fun shareDiagnostics() {
+        viewModelScope.launch {
+            val result = runCatching { maintenanceManager.exportDiagnostics() }
+            result.onSuccess { diagnosticsFile ->
+                val fileUri = FileProvider.getUriForFile(
+                    appContext,
+                    "${appContext.packageName}.fileprovider",
+                    diagnosticsFile
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, fileUri)
+                    putExtra(Intent.EXTRA_SUBJECT, "Fitx Diagnostics")
+                    putExtra(Intent.EXTRA_TEXT, "Fitx diagnostics report attached.")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                appContext.startActivity(
+                    Intent.createChooser(shareIntent, "Share diagnostics")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                _systemMessage.value = "Diagnostics exported and ready to share."
+            }.onFailure {
+                _systemMessage.value = "Diagnostics export failed: ${it.message.orEmpty()}"
+            }
+        }
+    }
+}
+
+@HiltViewModel
+class HealthCheckViewModel @Inject constructor(
+    private val maintenanceManager: AppMaintenanceManager
+) : ViewModel() {
+    private val _checks = MutableStateFlow(maintenanceManager.buildHealthChecks())
+    val checks: StateFlow<List<com.fitx.app.domain.model.HealthCheckItem>> = _checks
+
+    fun runHealthCheck() {
+        _checks.value = maintenanceManager.buildHealthChecks()
     }
 }

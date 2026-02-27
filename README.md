@@ -46,17 +46,25 @@ Compare the result with the hash in `SHA256.txt`.
 
 1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
 2. Ensure signing secrets exist locally in `keystore.properties` (not committed).
-3. Build release artifacts:
+3. Run release preparation:
+
+```powershell
+.\scripts\prepare-release.ps1
+```
+
+This script builds artifacts and updates `version.json` to match `versionName`.
+
+4. Build release artifacts manually if needed:
 
 ```powershell
 .\gradlew.bat :app:prepareGithubRelease
 ```
 
-4. Output files are generated in `release-artifacts/`:
+5. Output files are generated in `release-artifacts/`:
 - `fitx-vX.Y.Z-release.apk`
 - `SHA256.txt`
-5. Create GitHub tag/release (example `v1.0.0`) and upload both files.
-6. Update `version.json` with the new version/message/download URL and commit it.
+6. Create GitHub tag/release (example `v1.0.0`) and upload both files.
+7. Commit and push updated `version.json` after validating links.
 
 ## Main modules
 
@@ -68,8 +76,12 @@ Compare the result with the hash in `SHA256.txt`.
 - Routine Habits (daily streak tracking)
 - Date-Based Planner (tasks by date, daily repeats)
 - Nutrition Tracking (USDA pagination, custom foods, saved serving presets, local meal logs)
+- Nutrition barcode lookup (manual code + camera scan)
+- Today Score (activity, nutrition, tasks, consistency)
+- Weekly Insights screen (distance, sessions, calories, steps, weight trend)
 - Hybrid Online/Offline Sync (Room local-first + Firestore sync queue + WorkManager)
-- Dashboard + Settings + Reminder notifications (weight/water) + haptic toggle
+- Dashboard + Settings + smart reminder tuning (adaptive weight time + hydration cadence)
+- Quick-add bottom sheet shortcuts (task/weight/meal/activity/insights)
 - Home widget (pending tasks, completion progress, quick complete for top tasks)
 - Google-only Firebase login
 

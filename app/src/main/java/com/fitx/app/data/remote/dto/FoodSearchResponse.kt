@@ -11,7 +11,8 @@ data class FoodDto(
     @SerializedName("description") val description: String,
     @SerializedName("foodNutrients") val foodNutrients: List<FoodNutrientDto> = emptyList(),
     @SerializedName("servingSize") val servingSize: Double? = null,
-    @SerializedName("servingSizeUnit") val servingSizeUnit: String? = null
+    @SerializedName("servingSizeUnit") val servingSizeUnit: String? = null,
+    @SerializedName("gtinUpc") val gtinUpc: String? = null
 )
 
 data class FoodNutrientDto(

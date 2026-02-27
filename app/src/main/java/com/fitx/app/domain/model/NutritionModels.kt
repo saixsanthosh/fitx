@@ -7,7 +7,8 @@ data class FoodItem(
     val protein: Double,
     val carbs: Double,
     val fat: Double,
-    val baseGrams: Double = 100.0
+    val baseGrams: Double = 100.0,
+    val barcode: String? = null
 )
 
 data class MealEntry(

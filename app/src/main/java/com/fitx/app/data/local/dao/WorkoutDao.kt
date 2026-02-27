@@ -13,8 +13,14 @@ interface WorkoutDao {
     @Query("SELECT * FROM workout_template ORDER BY templateId DESC")
     fun observeTemplates(): Flow<List<WorkoutTemplateEntity>>
 
+    @Query("SELECT * FROM workout_template ORDER BY templateId DESC")
+    suspend fun getAllTemplates(): List<WorkoutTemplateEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTemplate(entity: WorkoutTemplateEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTemplates(entities: List<WorkoutTemplateEntity>)
 
     @Query("SELECT * FROM exercise_log WHERE dateEpochDay = :dateEpochDay ORDER BY logId DESC")
     fun observeExerciseLogs(dateEpochDay: Long): Flow<List<ExerciseLogEntity>>
@@ -22,6 +28,18 @@ interface WorkoutDao {
     @Query("SELECT * FROM exercise_log ORDER BY logId DESC")
     fun observeAllExerciseLogs(): Flow<List<ExerciseLogEntity>>
 
+    @Query("SELECT * FROM exercise_log ORDER BY logId DESC")
+    suspend fun getAllExerciseLogs(): List<ExerciseLogEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExerciseLog(entity: ExerciseLogEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExerciseLogs(entities: List<ExerciseLogEntity>)
+
+    @Query("DELETE FROM exercise_log")
+    suspend fun clearAllExerciseLogs()
+
+    @Query("DELETE FROM workout_template")
+    suspend fun clearAllTemplates()
 }

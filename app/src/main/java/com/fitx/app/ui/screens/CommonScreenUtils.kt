@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
@@ -38,8 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.fitx.app.domain.model.TaskItem
+import com.fitx.app.ui.components.FitxBrandBackground
 
 @Composable
 fun FitxScreenScaffold(
@@ -47,16 +50,18 @@ fun FitxScreenScaffold(
     content: @Composable (PaddingValues) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.background)
-    ) {
-        Scaffold(
-            containerColor = colors.background,
-            topBar = topBar,
-            content = content
-        )
+    FitxBrandBackground {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.background.copy(alpha = 0.94f))
+        ) {
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = topBar,
+                content = content
+            )
+        }
     }
 }
 
@@ -72,8 +77,10 @@ fun FlowButtonRow(labels: List<String>, actions: List<() -> Unit>) {
             Button(
                 onClick = actions[index],
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                )
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = MaterialTheme.shapes.medium
             ) {
                 Text(label)
             }
@@ -96,8 +103,10 @@ fun TaskRow(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(rowAlpha.value),
+        shape = MaterialTheme.shapes.medium,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
         )
     ) {
         Row(
@@ -169,13 +178,27 @@ fun requiredTrackingPermissions(includeActivityRecognition: Boolean = true): Arr
 @Composable
 fun ScreenTopBar(title: String, onBack: () -> Unit) {
     TopAppBar(
-        title = { Text(title) },
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent,
             titleContentColor = MaterialTheme.colorScheme.onBackground
         ),
         navigationIcon = {
-            IconButton(onClick = onBack) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+            ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         }

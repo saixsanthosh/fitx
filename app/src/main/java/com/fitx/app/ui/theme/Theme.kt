@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.dp
 private val LightColors = lightColorScheme(
     primary = PrimaryLight,
     onPrimary = OnPrimaryLight,
+    primaryContainer = AccentContainerLight,
+    onPrimaryContainer = OnPrimaryLight,
     secondary = SecondaryLight,
     onSecondary = OnSecondaryLight,
     secondaryContainer = AccentContainerLight,
@@ -26,6 +28,7 @@ private val LightColors = lightColorScheme(
     onSurface = OnSurfaceLight,
     onSurfaceVariant = OnSurfaceVariantLight,
     outline = OutlineLight,
+    surfaceTint = PrimaryLight,
     error = ErrorLight,
     onError = OnErrorLight
 )
@@ -33,6 +36,8 @@ private val LightColors = lightColorScheme(
 private val DarkColors = darkColorScheme(
     primary = PrimaryDark,
     onPrimary = OnPrimaryDark,
+    primaryContainer = AccentContainerDark,
+    onPrimaryContainer = OnPrimaryDark,
     secondary = SecondaryDark,
     onSecondary = OnSecondaryDark,
     secondaryContainer = AccentContainerDark,
@@ -48,6 +53,7 @@ private val DarkColors = darkColorScheme(
     onSurface = OnSurfaceDark,
     onSurfaceVariant = OnSurfaceVariantDark,
     outline = OutlineDark,
+    surfaceTint = PrimaryDark,
     error = ErrorDark,
     onError = OnErrorDark
 )
@@ -55,7 +61,7 @@ private val DarkColors = darkColorScheme(
 private val FitxShapes = Shapes(
     small = RoundedCornerShape(14.dp),
     medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(16.dp)
+    large = RoundedCornerShape(20.dp)
 )
 
 @Composable

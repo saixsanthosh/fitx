@@ -18,8 +18,14 @@ interface TaskDao {
     )
     fun observeTasks(dateEpochDay: Long): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM task_item ORDER BY taskId DESC")
+    suspend fun getAllTasks(): List<TaskEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTask(entity: TaskEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTasks(entities: List<TaskEntity>)
 
     @Query("SELECT * FROM task_item WHERE taskId = :taskId LIMIT 1")
     suspend fun getTaskById(taskId: Long): TaskEntity?
@@ -62,4 +68,7 @@ interface TaskDao {
 
     @Query("UPDATE task_item SET isCompleted = 1 WHERE taskId = :taskId")
     suspend fun completeTask(taskId: Long)
+
+    @Query("DELETE FROM task_item")
+    suspend fun clearAll()
 }

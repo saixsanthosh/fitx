@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.room.withTransaction
 import com.fitx.app.BuildConfig
@@ -367,7 +368,9 @@ class NutritionRepositoryImpl @Inject constructor(
 ) : NutritionRepository {
     override suspend fun searchFoods(query: String): List<FoodItem> {
         val normalizedQuery = query.trim()
-        if (normalizedQuery.isBlank()) return browseFoods(pageNumber = 1, pageSize = 200).ifEmpty { OfflineFoodCatalog.items }
+        if (normalizedQuery.isBlank()) {
+            return browseFoods(pageNumber = 1, pageSize = 200).ifEmpty { OfflineFoodCatalog.items }
+        }
 
         if (BuildConfig.USDA_API_KEY.isBlank()) {
             return searchLocalFoods(normalizedQuery)
@@ -381,11 +384,36 @@ class NutritionRepositoryImpl @Inject constructor(
         }.getOrElse { emptyList() }
 
         if (remoteResults.isNotEmpty()) {
-            return remoteResults
-                .distinctBy { "${it.fdcId}_${it.name.lowercase()}" }
-                .take(400)
+            val merged = (remoteResults + searchLocalFoods(normalizedQuery))
+                .distinctBy { foodIdentity(it) }
+            return rankFoodsByQuery(
+                query = normalizedQuery,
+                foods = merged,
+                limit = 400
+            )
         }
         return searchLocalFoods(normalizedQuery)
+    }
+
+    override suspend fun lookupFoodByBarcode(barcode: String): FoodItem? {
+        val normalizedBarcode = barcode.filter { it.isDigit() }.ifBlank { barcode.trim() }
+        if (normalizedBarcode.isBlank()) return null
+        if (BuildConfig.USDA_API_KEY.isBlank()) return null
+        val remoteMatches = runCatching {
+            usdaApiService.searchFoods(
+                apiKey = BuildConfig.USDA_API_KEY,
+                request = FoodSearchRequest(
+                    query = normalizedBarcode,
+                    pageSize = 30,
+                    pageNumber = 1
+                )
+            ).foods.map { it.toFoodItem() }
+        }.getOrElse { emptyList() }
+
+        if (remoteMatches.isEmpty()) return null
+        return remoteMatches.firstOrNull {
+            it.barcode.orEmpty().filter { c -> c.isDigit() } == normalizedBarcode
+        } ?: remoteMatches.firstOrNull()
     }
 
     override suspend fun browseFoods(pageNumber: Int, pageSize: Int): List<FoodItem> {
@@ -435,6 +463,37 @@ class NutritionRepositoryImpl @Inject constructor(
         cloudSyncScheduler.syncNow()
     }
 
+    override suspend fun copyMeals(fromEpochDay: Long, toEpochDay: Long): Int {
+        if (fromEpochDay == toEpochDay) return 0
+        val sourceMeals = mealDao.getMealsByDate(fromEpochDay)
+        if (sourceMeals.isEmpty()) return 0
+        sourceMeals.forEach { source ->
+            val copy = source.copy(
+                mealEntryId = 0,
+                dateEpochDay = toEpochDay
+            )
+            val insertedId = mealDao.insertMeal(copy)
+            syncQueueRepository.enqueueUpsert(
+                entityType = SyncEntityType.MEAL,
+                entityId = insertedId.toString(),
+                payload = mapOf(
+                    "mealEntryId" to insertedId,
+                    "dateEpochDay" to toEpochDay,
+                    "mealType" to copy.mealType,
+                    "foodName" to copy.foodName,
+                    "grams" to copy.grams,
+                    "calories" to copy.calories,
+                    "protein" to copy.protein,
+                    "carbs" to copy.carbs,
+                    "fat" to copy.fat,
+                    "source" to "COPIED"
+                )
+            )
+        }
+        cloudSyncScheduler.syncNow()
+        return sourceMeals.size
+    }
+
     override fun observeCustomFoods(): Flow<List<CustomFood>> {
         return dataStore.data.map { prefs ->
             parseCustomFoodsJson(prefs[CUSTOM_FOODS_KEY].orEmpty())
@@ -464,6 +523,48 @@ class NutritionRepositoryImpl @Inject constructor(
         writeCustomFoods(foods)
     }
 
+    override fun observeFavoriteFoods(): Flow<List<FoodItem>> {
+        return dataStore.data.map { prefs ->
+            parseFoodItemsJson(prefs[FAVORITE_FOODS_KEY].orEmpty())
+        }
+    }
+
+    override fun observeRecentFoods(): Flow<List<FoodItem>> {
+        return dataStore.data.map { prefs ->
+            parseFoodItemsJson(prefs[RECENT_FOODS_KEY].orEmpty())
+        }
+    }
+
+    override suspend fun toggleFavoriteFood(foodItem: FoodItem) {
+        val normalized = foodItem.normalized()
+        if (normalized.name.isBlank()) return
+        val favorites = observeFavoriteFoods().first().toMutableList()
+        val existing = favorites.indexOfFirst { foodIdentity(it) == foodIdentity(normalized) }
+        if (existing >= 0) {
+            favorites.removeAt(existing)
+        } else {
+            favorites.add(0, normalized)
+        }
+        writeFavoriteFoods(
+            favorites
+                .distinctBy { foodIdentity(it) }
+                .take(MAX_FAVORITE_FOODS)
+        )
+    }
+
+    override suspend fun recordRecentFood(foodItem: FoodItem) {
+        val normalized = foodItem.normalized()
+        if (normalized.name.isBlank()) return
+        val recents = observeRecentFoods().first().toMutableList()
+        recents.removeAll { foodIdentity(it) == foodIdentity(normalized) }
+        recents.add(0, normalized)
+        writeRecentFoods(
+            recents
+                .distinctBy { foodIdentity(it) }
+                .take(MAX_RECENT_FOODS)
+        )
+    }
+
     private fun FoodDto.toFoodItem(): FoodItem {
         val calories = nutrientValue("energy")
         val protein = nutrientValue("protein")
@@ -477,7 +578,8 @@ class NutritionRepositoryImpl @Inject constructor(
             protein = protein,
             carbs = carbs,
             fat = fat,
-            baseGrams = base
+            baseGrams = base,
+            barcode = gtinUpc?.trim().orEmpty().ifBlank { null }
         )
     }
 
@@ -499,27 +601,11 @@ class NutritionRepositoryImpl @Inject constructor(
     }
 
     private fun searchLocalFoods(query: String): List<FoodItem> {
-        val normalized = query.lowercase().trim()
-        val tokens = normalized.split(Regex("\\s+")).filter { it.isNotBlank() }
-        return OfflineFoodCatalog.items
-            .asSequence()
-            .map { item ->
-                val name = item.name.lowercase()
-                val score = when {
-                    name == normalized -> 100
-                    name.startsWith(normalized) -> 80
-                    tokens.isNotEmpty() && tokens.all { token -> name.contains(token) } -> 70
-                    name.contains(normalized) -> 50
-                    tokens.any { token -> name.contains(token) } -> 25
-                    else -> 0
-                }
-                item to score
-            }
-            .filter { (_, score) -> score > 0 }
-            .sortedByDescending { (_, score) -> score }
-            .map { (item, _) -> item }
-            .take(250)
-            .toList()
+        return rankFoodsByQuery(
+            query = query,
+            foods = OfflineFoodCatalog.items,
+            limit = 250
+        )
     }
 
     private fun parseCustomFoodsJson(json: String): List<CustomFood> {
@@ -536,12 +622,205 @@ class NutritionRepositoryImpl @Inject constructor(
             prefs[CUSTOM_FOODS_KEY] = json
         }
     }
+
+    private fun parseFoodItemsJson(json: String): List<FoodItem> {
+        if (json.isBlank()) return emptyList()
+        return runCatching {
+            val listType = object : TypeToken<List<FoodItem>>() {}.type
+            gson.fromJson<List<FoodItem>>(json, listType)
+                .orEmpty()
+                .map { it.normalized() }
+                .filter { it.name.isNotBlank() }
+                .distinctBy { foodIdentity(it) }
+        }.getOrElse { emptyList() }
+    }
+
+    private suspend fun writeFavoriteFoods(foods: List<FoodItem>) {
+        val json = gson.toJson(foods)
+        dataStore.edit { prefs ->
+            prefs[FAVORITE_FOODS_KEY] = json
+        }
+    }
+
+    private suspend fun writeRecentFoods(foods: List<FoodItem>) {
+        val json = gson.toJson(foods)
+        dataStore.edit { prefs ->
+            prefs[RECENT_FOODS_KEY] = json
+        }
+    }
+
+    private fun rankFoodsByQuery(
+        query: String,
+        foods: List<FoodItem>,
+        limit: Int
+    ): List<FoodItem> {
+        val normalizedQuery = normalizeSearchText(query)
+        if (normalizedQuery.isBlank()) {
+            return foods
+                .asSequence()
+                .map { it.normalized() }
+                .filter { it.name.isNotBlank() }
+                .distinctBy { foodIdentity(it) }
+                .take(limit)
+                .toList()
+        }
+
+        val queryTokens = normalizedQuery.split(' ').filter { it.isNotBlank() }
+        return foods
+            .asSequence()
+            .map { item ->
+                val safe = item.normalized()
+                val normalizedName = normalizeSearchText(safe.name)
+                val nameTokens = normalizedName.split(' ').filter { it.isNotBlank() }
+                val score = calculateSearchScore(
+                    query = normalizedQuery,
+                    queryTokens = queryTokens,
+                    normalizedName = normalizedName,
+                    nameTokens = nameTokens
+                )
+                Triple(safe, score, normalizedName.length)
+            }
+            .filter { (_, score, _) -> score > 0 }
+            .sortedWith(
+                compareByDescending<Triple<FoodItem, Int, Int>> { (_, score, _) -> score }
+                    .thenBy { (_, _, length) -> length }
+                    .thenBy { (item, _, _) -> item.name }
+            )
+            .map { (item, _, _) -> item }
+            .distinctBy { foodIdentity(it) }
+            .take(limit)
+            .toList()
+    }
+
+    private fun calculateSearchScore(
+        query: String,
+        queryTokens: List<String>,
+        normalizedName: String,
+        nameTokens: List<String>
+    ): Int {
+        if (normalizedName.isBlank()) return 0
+        var score = 0
+        if (normalizedName == query) {
+            score += 120
+        }
+        if (normalizedName.startsWith(query)) {
+            score += 92
+        }
+        if (normalizedName.contains(query)) {
+            score += 48
+        }
+        if (queryTokens.isNotEmpty() && queryTokens.all { token -> normalizedName.contains(token) }) {
+            score += 36
+        }
+
+        val prefixMatches = queryTokens.count { token ->
+            nameTokens.any { word -> word.startsWith(token) }
+        }
+        score += prefixMatches * 9
+
+        val fuzzyDistance = minFuzzyDistance(query, queryTokens, normalizedName, nameTokens)
+        score += when (fuzzyDistance) {
+            0 -> 22
+            1 -> 16
+            2 -> 10
+            3 -> 5
+            else -> 0
+        }
+
+        return score
+    }
+
+    private fun minFuzzyDistance(
+        query: String,
+        queryTokens: List<String>,
+        normalizedName: String,
+        nameTokens: List<String>
+    ): Int {
+        val candidates = buildList {
+            add(normalizedName)
+            addAll(nameTokens)
+        }.filter { it.isNotBlank() }
+        if (candidates.isEmpty()) return Int.MAX_VALUE
+
+        var minDistance = levenshteinDistance(query, normalizedName, maxDistance = 3)
+        if (minDistance == 0) return 0
+
+        queryTokens.forEach { token ->
+            candidates.forEach { candidate ->
+                val distance = levenshteinDistance(token, candidate, maxDistance = 3)
+                if (distance < minDistance) {
+                    minDistance = distance
+                    if (minDistance == 0) return 0
+                }
+            }
+        }
+        return minDistance
+    }
+
+    private fun levenshteinDistance(a: String, b: String, maxDistance: Int): Int {
+        if (a == b) return 0
+        if (a.isBlank() || b.isBlank()) return maxDistance + 1
+        if (kotlin.math.abs(a.length - b.length) > maxDistance) return maxDistance + 1
+
+        var previous = IntArray(b.length + 1) { it }
+        var current = IntArray(b.length + 1)
+
+        for (i in 1..a.length) {
+            current[0] = i
+            var rowMin = current[0]
+            val aChar = a[i - 1]
+            for (j in 1..b.length) {
+                val cost = if (aChar == b[j - 1]) 0 else 1
+                current[j] = minOf(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + cost
+                )
+                if (current[j] < rowMin) rowMin = current[j]
+            }
+            if (rowMin > maxDistance) return maxDistance + 1
+            val temp = previous
+            previous = current
+            current = temp
+        }
+        return previous[b.length]
+    }
+
+    private fun normalizeSearchText(value: String): String {
+        return value
+            .trim()
+            .lowercase()
+            .replace(Regex("[^a-z0-9\\s]"), " ")
+            .replace(Regex("\\s+"), " ")
+    }
+
+    private fun FoodItem.normalized(): FoodItem {
+        return copy(
+            name = name.trim(),
+            calories = calories.coerceAtLeast(0.0),
+            protein = protein.coerceAtLeast(0.0),
+            carbs = carbs.coerceAtLeast(0.0),
+            fat = fat.coerceAtLeast(0.0),
+            baseGrams = baseGrams.coerceAtLeast(1.0)
+        )
+    }
+
+    private fun foodIdentity(foodItem: FoodItem): String {
+        return "${foodItem.fdcId}_${normalizeSearchText(foodItem.name)}"
+    }
 }
 
 private val DARK_THEME_KEY = booleanPreferencesKey("dark_theme_enabled")
 private val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
 private val HAPTICS_KEY = booleanPreferencesKey("haptics_enabled")
+private val SMART_REMINDERS_KEY = booleanPreferencesKey("smart_reminders_enabled")
+private val SMART_REMINDER_HOUR_KEY = intPreferencesKey("smart_reminder_hour")
+private val HYDRATION_INTERVAL_HOURS_KEY = intPreferencesKey("hydration_interval_hours")
 private val CUSTOM_FOODS_KEY = stringPreferencesKey("custom_foods_json")
+private val FAVORITE_FOODS_KEY = stringPreferencesKey("favorite_foods_json")
+private val RECENT_FOODS_KEY = stringPreferencesKey("recent_foods_json")
+private const val MAX_FAVORITE_FOODS = 40
+private const val MAX_RECENT_FOODS = 25
 
 @Singleton
 class SettingsRepositoryImpl @Inject constructor(
@@ -552,7 +831,10 @@ class SettingsRepositoryImpl @Inject constructor(
             SettingsPreferences(
                 darkTheme = prefs[DARK_THEME_KEY] ?: true,
                 notificationsEnabled = prefs[NOTIFICATIONS_KEY] ?: true,
-                hapticsEnabled = prefs[HAPTICS_KEY] ?: true
+                hapticsEnabled = prefs[HAPTICS_KEY] ?: true,
+                smartRemindersEnabled = prefs[SMART_REMINDERS_KEY] ?: true,
+                smartReminderHour = prefs[SMART_REMINDER_HOUR_KEY] ?: 8,
+                hydrationIntervalHours = prefs[HYDRATION_INTERVAL_HOURS_KEY] ?: 4
             )
         }
     }
@@ -567,6 +849,19 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setHaptics(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[HAPTICS_KEY] = enabled }
+    }
+
+    override suspend fun setSmartReminders(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[SMART_REMINDERS_KEY] = enabled }
+    }
+
+    override suspend fun setSmartReminderTuning(reminderHour: Int, hydrationIntervalHours: Int) {
+        val safeHour = reminderHour.coerceIn(6, 22)
+        val safeInterval = hydrationIntervalHours.coerceIn(3, 6)
+        dataStore.edit { prefs ->
+            prefs[SMART_REMINDER_HOUR_KEY] = safeHour
+            prefs[HYDRATION_INTERVAL_HOURS_KEY] = safeInterval
+        }
     }
 }
 

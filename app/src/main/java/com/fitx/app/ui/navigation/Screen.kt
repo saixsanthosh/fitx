@@ -7,6 +7,8 @@ sealed class Screen(val route: String) {
     data object LiveTracking : Screen("live_tracking")
     data object ActivityFinish : Screen("activity_finish")
     data object ActivityHistory : Screen("activity_history")
+    data object Music : Screen("music")
+    data object MusicNowPlaying : Screen("music_now_playing")
     data object SessionDetail : Screen("session_detail/{sessionId}") {
         fun createRoute(sessionId: Long): String = "session_detail/$sessionId"
     }
@@ -15,6 +17,8 @@ sealed class Screen(val route: String) {
     data object Habits : Screen("habits")
     data object Planner : Screen("planner")
     data object Nutrition : Screen("nutrition")
+    data object WeeklyInsights : Screen("weekly_insights")
+    data object HealthCheck : Screen("health_check")
     data object Settings : Screen("settings")
 }
 

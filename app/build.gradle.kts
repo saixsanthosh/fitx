@@ -10,6 +10,7 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
     id("com.google.dagger.hilt.android")
     id("com.google.gms.google-services") apply false
+    id("com.google.firebase.crashlytics") apply false
 }
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -40,7 +41,22 @@ android {
             useSupportLibrary = true
         }
 
-        val usdaApiKey = (project.findProperty("USDA_API_KEY") as String?) ?: ""
+        val localConfig = Properties().apply {
+            val localFile = rootProject.file("local.properties")
+            if (localFile.exists()) {
+                FileInputStream(localFile).use(::load)
+            }
+        }
+        val usdaApiKey = (
+            (project.findProperty("USDA_API_KEY") as String?)
+                ?: localConfig.getProperty("USDA_API_KEY")
+                ?: System.getenv("USDA_API_KEY")
+            ).orEmpty()
+        val youtubeApiKey = (
+            (project.findProperty("YOUTUBE_API_KEY") as String?)
+                ?: localConfig.getProperty("YOUTUBE_API_KEY")
+                ?: System.getenv("YOUTUBE_API_KEY")
+            ).orEmpty()
         val updateInfoUrl =
             (project.findProperty("UPDATE_INFO_URL") as String?)
                 ?: "https://raw.githubusercontent.com/saixsanthosh/fitx/main/version.json"
@@ -48,6 +64,7 @@ android {
             (project.findProperty("UPDATE_FALLBACK_URL") as String?)
                 ?: "https://github.com/saixsanthosh/fitx/releases/latest"
         buildConfigField("String", "USDA_API_KEY", "\"$usdaApiKey\"")
+        buildConfigField("String", "YOUTUBE_API_KEY", "\"$youtubeApiKey\"")
         buildConfigField("String", "UPDATE_INFO_URL", "\"$updateInfoUrl\"")
         buildConfigField("String", "UPDATE_FALLBACK_URL", "\"$updateFallbackUrl\"")
     }
@@ -106,6 +123,7 @@ android {
 
 if (hasGoogleServicesConfig) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 } else {
     logger.lifecycle("google-services.json not found. Building Fitx without Firebase Google Services plugin.")
 }
@@ -129,6 +147,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.navigation:navigation-compose:2.8.4")
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
@@ -153,10 +173,13 @@ dependencies {
 
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 
     implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
 
     implementation("androidx.core:core-splashscreen:1.0.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")

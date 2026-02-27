@@ -51,9 +51,13 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
 
     private var timerJob: Job? = null
     private var previousLocation: Location? = null
+    private var previousLocationTimeMillis: Long? = null
     private var initialStepCounter: Float? = null
     private var trackedWeightKg: Double = 70.0
     private var trackedType: ActivityType = ActivityType.WALKING
+    private var lowMotionStreak: Int = 0
+    private var pausedAtMillis: Long? = null
+    private var accumulatedPausedMillis: Long = 0L
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -94,7 +98,11 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
             )
         )
         previousLocation = null
+        previousLocationTimeMillis = null
         initialStepCounter = null
+        lowMotionStreak = 0
+        pausedAtMillis = null
+        accumulatedPausedMillis = 0L
 
         startForeground(
             NotificationHelper.TRACKING_NOTIFICATION_ID,
@@ -106,6 +114,9 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
     }
 
     private fun handleStop() {
+        if (TrackingStore.state.value.isAutoPaused) {
+            resumeAutoPause(System.currentTimeMillis())
+        }
         val finalState = TrackingStore.state.value
         if (!finalState.isTracking) {
             stopSelf()
@@ -143,7 +154,10 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
             while (isActive) {
                 val current = TrackingStore.state.value
                 if (!current.isTracking) break
-                val duration = ((System.currentTimeMillis() - current.startTimeMillis) / 1000L).coerceAtLeast(0)
+                val now = System.currentTimeMillis()
+                val livePausedMillis = pausedAtMillis?.let { now - it } ?: 0L
+                val effectiveElapsed = now - current.startTimeMillis - accumulatedPausedMillis - livePausedMillis
+                val duration = (effectiveElapsed / 1000L).coerceAtLeast(0)
                 val speed = if (duration > 0) current.distanceMeters / duration else 0.0
                 val calories = CalorieEstimator.estimate(
                     type = current.activityType,
@@ -160,7 +174,8 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
                 val updated = TrackingStore.state.value
                 notificationHelper.createChannels()
                 val content = "Dist ${"%.2f".format(updated.distanceMeters / 1000)} km  " +
-                    "Time ${DateUtils.formatDuration(updated.durationSeconds)}"
+                    "Time ${DateUtils.formatDuration(updated.durationSeconds)}" +
+                    if (updated.isAutoPaused) "  Auto-paused" else ""
                 startForeground(
                     NotificationHelper.TRACKING_NOTIFICATION_ID,
                     notificationHelper.buildTrackingNotification(content)
@@ -198,7 +213,37 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
 
         val prev = previousLocation
         val delta = if (prev == null) 0.0 else prev.distanceTo(location).toDouble().coerceAtLeast(0.0)
+        val now = System.currentTimeMillis()
+        val previousTime = previousLocationTimeMillis
+        val elapsedSeconds = if (previousTime != null) {
+            ((location.time - previousTime).coerceAtLeast(1L)) / 1000.0
+        } else {
+            0.0
+        }
+        val speedFromDistance = if (elapsedSeconds > 0.0) delta / elapsedSeconds else 0.0
+        val instantSpeed = if (location.hasSpeed()) {
+            location.speed.toDouble().coerceAtLeast(0.0)
+        } else {
+            speedFromDistance
+        }
+        val speedThreshold = if (trackedType == ActivityType.CYCLING) 1.2 else 0.6
+        val movementThreshold = if (trackedType == ActivityType.CYCLING) 4.0 else 2.5
+        val moving = instantSpeed >= speedThreshold || delta >= movementThreshold
+
+        if (moving) {
+            lowMotionStreak = 0
+            if (currentState.isAutoPaused) {
+                resumeAutoPause(now)
+            }
+        } else {
+            lowMotionStreak += 1
+            if (!currentState.isAutoPaused && lowMotionStreak >= 3) {
+                enterAutoPause(now)
+            }
+        }
+
         previousLocation = location
+        previousLocationTimeMillis = location.time
 
         val point = ActivityPoint(
             sessionId = 0,
@@ -206,12 +251,34 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
             longitude = location.longitude,
             timestampMillis = System.currentTimeMillis()
         )
+
+        val activeState = TrackingStore.state.value
+        val distanceToApply = if (activeState.isAutoPaused && delta < 6.0) 0.0 else delta
         TrackingStore.update {
             it.copy(
-                distanceMeters = it.distanceMeters + delta,
+                distanceMeters = it.distanceMeters + distanceToApply,
                 pathPoints = it.pathPoints + point
             )
         }
+    }
+
+    private fun enterAutoPause(nowMillis: Long) {
+        if (pausedAtMillis != null) return
+        pausedAtMillis = nowMillis
+        TrackingStore.update { state ->
+            state.copy(
+                isAutoPaused = true,
+                autoPauseCount = state.autoPauseCount + 1
+            )
+        }
+    }
+
+    private fun resumeAutoPause(nowMillis: Long) {
+        val pausedAt = pausedAtMillis ?: return
+        accumulatedPausedMillis += (nowMillis - pausedAt).coerceAtLeast(0L)
+        pausedAtMillis = null
+        lowMotionStreak = 0
+        TrackingStore.update { it.copy(isAutoPaused = false) }
     }
 
     private fun registerStepCounter() {

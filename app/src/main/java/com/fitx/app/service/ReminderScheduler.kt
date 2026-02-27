@@ -18,19 +18,23 @@ import javax.inject.Singleton
 class ReminderScheduler @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun syncReminders(enabled: Boolean) {
+    fun syncReminders(
+        enabled: Boolean,
+        weightReminderHour: Int = 8,
+        hydrationIntervalHours: Int = 4
+    ) {
         if (!enabled) {
             WorkManager.getInstance(context).cancelUniqueWork(WEIGHT_WORK)
             WorkManager.getInstance(context).cancelUniqueWork(WATER_WORK)
             return
         }
-        scheduleWeightReminder()
-        scheduleWaterReminder()
+        scheduleWeightReminder(weightReminderHour.coerceIn(6, 22))
+        scheduleWaterReminder(hydrationIntervalHours.coerceIn(3, 6))
     }
 
-    private fun scheduleWeightReminder() {
+    private fun scheduleWeightReminder(hour: Int) {
         val request = PeriodicWorkRequestBuilder<WeightReminderWorker>(1, TimeUnit.DAYS)
-            .setInitialDelay(initialDelayUntil(8, 0), TimeUnit.MILLISECONDS)
+            .setInitialDelay(initialDelayUntil(hour, 0), TimeUnit.MILLISECONDS)
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
@@ -44,8 +48,11 @@ class ReminderScheduler @Inject constructor(
         )
     }
 
-    private fun scheduleWaterReminder() {
-        val request = PeriodicWorkRequestBuilder<WaterReminderWorker>(4, TimeUnit.HOURS)
+    private fun scheduleWaterReminder(intervalHours: Int) {
+        val request = PeriodicWorkRequestBuilder<WaterReminderWorker>(
+            intervalHours.toLong(),
+            TimeUnit.HOURS
+        )
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.NOT_REQUIRED)

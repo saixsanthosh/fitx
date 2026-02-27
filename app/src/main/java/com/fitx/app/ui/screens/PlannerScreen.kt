@@ -3,6 +3,7 @@ package com.fitx.app.ui.screens
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,11 +17,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -89,17 +93,18 @@ fun PlannerRoute(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
                 ) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            text = "Type 2: Daily Variable List",
+                            text = "Task Calendar",
                             fontWeight = FontWeight.Bold
                         )
                         MonthPicker(
@@ -118,9 +123,23 @@ fun PlannerRoute(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(onClick = { viewModel.moveDate(-1) }) { Text("Prev") }
+                    Button(
+                        onClick = { viewModel.moveDate(-1) },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) { Text("Prev") }
                     Text(DateUtils.formatEpochDay(date), fontWeight = FontWeight.Bold)
-                    Button(onClick = { viewModel.moveDate(1) }) { Text("Next") }
+                    Button(
+                        onClick = { viewModel.moveDate(1) },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) { Text("Next") }
                 }
             }
             item {
@@ -130,15 +149,27 @@ fun PlannerRoute(
                 ) {
                     AssistChip(
                         onClick = {},
-                        label = { Text("Pending $pendingCount") }
+                        label = { Text("Pending $pendingCount") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                     AssistChip(
                         onClick = {},
-                        label = { Text("Done $completedCount") }
+                        label = { Text("Done $completedCount") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                     AssistChip(
                         onClick = {},
-                        label = { Text("High $highPriorityCount") }
+                        label = { Text("High $highPriorityCount") },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                 }
             }
@@ -173,17 +204,29 @@ fun PlannerRoute(
                     FilterChip(
                         selected = priority == TaskItem.PRIORITY_LOW,
                         onClick = { priority = TaskItem.PRIORITY_LOW },
-                        label = { Text("Low") }
+                        label = { Text("Low") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
                     FilterChip(
                         selected = priority == TaskItem.PRIORITY_MEDIUM,
                         onClick = { priority = TaskItem.PRIORITY_MEDIUM },
-                        label = { Text("Medium") }
+                        label = { Text("Medium") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
                     FilterChip(
                         selected = priority == TaskItem.PRIORITY_HIGH,
                         onClick = { priority = TaskItem.PRIORITY_HIGH },
-                        label = { Text("High") }
+                        label = { Text("High") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        )
                     )
                 }
             }
@@ -201,38 +244,52 @@ fun PlannerRoute(
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        val minutes = parseTimeMinutesOrNull(timeText)
-                        if (editingTaskId == null) {
-                            viewModel.addTask(
-                                title = title,
-                                description = desc,
-                                repeatDaily = repeatDaily,
-                                timeMinutesOfDay = minutes,
-                                priority = priority,
-                                reminderEnabled = reminderEnabled
-                            )
-                        } else {
-                            viewModel.updateTask(
-                                TaskItem(
-                                    taskId = editingTaskId!!,
+                    Button(
+                        onClick = {
+                            val minutes = parseTimeMinutesOrNull(timeText)
+                            if (editingTaskId == null) {
+                                viewModel.addTask(
                                     title = title,
                                     description = desc,
-                                    dateEpochDay = date,
-                                    isCompleted = editingCompleted,
                                     repeatDaily = repeatDaily,
                                     timeMinutesOfDay = minutes,
                                     priority = priority,
                                     reminderEnabled = reminderEnabled
                                 )
-                            )
-                        }
-                        resetForm()
-                    }) {
+                            } else {
+                                viewModel.updateTask(
+                                    TaskItem(
+                                        taskId = editingTaskId!!,
+                                        title = title,
+                                        description = desc,
+                                        dateEpochDay = date,
+                                        isCompleted = editingCompleted,
+                                        repeatDaily = repeatDaily,
+                                        timeMinutesOfDay = minutes,
+                                        priority = priority,
+                                        reminderEnabled = reminderEnabled
+                                    )
+                                )
+                            }
+                            resetForm()
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
                         Text(if (editingTaskId == null) "Add Task" else "Update Task")
                     }
                     if (editingTaskId != null) {
-                        Button(onClick = { resetForm() }) {
+                        Button(
+                            onClick = { resetForm() },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
                             Text("Cancel")
                         }
                     }
@@ -288,9 +345,23 @@ private fun MonthPicker(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Button(onClick = { onMonthChange(month.minusMonths(1)) }) { Text("<") }
+            Button(
+                onClick = { onMonthChange(month.minusMonths(1)) },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) { Text("<") }
             Text("${month.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${month.year}")
-            Button(onClick = { onMonthChange(month.plusMonths(1)) }) { Text(">") }
+            Button(
+                onClick = { onMonthChange(month.plusMonths(1)) },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) { Text(">") }
         }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -338,7 +409,8 @@ private fun PlannerTaskRow(
             .fillMaxWidth()
             .alpha(rowAlpha.value),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
     ) {
         Row(
             modifier = Modifier
@@ -350,16 +422,19 @@ private fun PlannerTaskRow(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Checkbox(checked = task.isCompleted, onCheckedChange = onToggle)
                 Column {
-                    Text(task.title, fontWeight = FontWeight.Bold)
+                    Text(task.title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     val time = formatMinutes(task.timeMinutesOfDay)
                     val priorityLabel = when (task.priority) {
                         TaskItem.PRIORITY_HIGH -> "High"
                         TaskItem.PRIORITY_LOW -> "Low"
                         else -> "Medium"
                     }
-                    Text("$time  $priorityLabel${if (task.reminderEnabled) "  Reminder" else ""}")
+                    Text(
+                        "$time  $priorityLabel${if (task.reminderEnabled) "  Reminder" else ""}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     if (task.description.isNotBlank()) {
-                        Text(task.description)
+                        Text(task.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

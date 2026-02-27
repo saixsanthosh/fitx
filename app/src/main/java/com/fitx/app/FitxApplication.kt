@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.fitx.app.service.sync.CloudSyncScheduler
 import com.fitx.app.util.NotificationHelper
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -29,5 +30,13 @@ class FitxApplication : Application(), Configuration.Provider {
         super.onCreate()
         notificationHelper.createChannels()
         cloudSyncScheduler.schedulePeriodicSync()
+        runCatching {
+            FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true)
+            val existingHandler = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                FirebaseCrashlytics.getInstance().recordException(throwable)
+                existingHandler?.uncaughtException(thread, throwable)
+            }
+        }
     }
 }

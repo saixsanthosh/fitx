@@ -1,5 +1,9 @@
 package com.fitx.app.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,15 +18,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,22 +42,30 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.fitx.app.domain.model.FoodItem
 import com.fitx.app.domain.model.MealEntry
 import com.fitx.app.ui.viewmodel.NutritionViewModel
 import kotlin.math.roundToInt
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.google.zxing.client.android.Intents
+import com.google.zxing.integration.android.IntentIntegrator
 
 @Composable
 fun NutritionRoute(
@@ -55,14 +74,24 @@ fun NutritionRoute(
 ) {
     val meals by viewModel.meals.collectAsStateWithLifecycle()
     val customFoods by viewModel.customFoods.collectAsStateWithLifecycle()
+    val favoriteFoods by viewModel.favoriteFoods.collectAsStateWithLifecycle()
+    val recentFoods by viewModel.recentFoods.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val loadingMoreFoods by viewModel.loadingMoreFoods.collectAsStateWithLifecycle()
     val canLoadMoreFoods by viewModel.canLoadMoreFoods.collectAsStateWithLifecycle()
     val searchMessage by viewModel.searchMessage.collectAsStateWithLifecycle()
+    val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val offlineCount = viewModel.offlineCatalogCount
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
+    val favoriteIdentities = remember(favoriteFoods) {
+        favoriteFoods.map { "${it.fdcId}_${it.name.trim().lowercase()}" }.toSet()
+    }
 
     var query by remember { mutableStateOf("") }
+    var barcodeInput by remember { mutableStateOf("") }
     var gramsInput by remember { mutableStateOf("100") }
     var selectedMealType by remember { mutableStateOf("Breakfast") }
     var customName by remember { mutableStateOf("") }
@@ -76,6 +105,15 @@ fun NutritionRoute(
         listOf("All", "egg", "chicken", "rice", "oats", "banana", "paneer", "tofu", "milk")
     }
     val mealTypes = remember { listOf("Breakfast", "Lunch", "Snack", "Dinner") }
+    val barcodeScanLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val scanned = result.data?.getStringExtra(Intents.Scan.RESULT).orEmpty().trim()
+        if (scanned.isNotBlank()) {
+            barcodeInput = scanned
+            viewModel.findFoodByBarcode(scanned)
+        }
+    }
 
     val totalCalories = meals.sumOf { it.calories }
     val totalProtein = meals.sumOf { it.protein }
@@ -85,10 +123,6 @@ fun NutritionRoute(
     val leftCalories = (dailyTarget - totalCalories).coerceAtLeast(0.0)
     val progress = (totalCalories / dailyTarget).toFloat().coerceIn(0f, 1f)
 
-    LaunchedEffect(Unit) {
-        viewModel.loadAllFoods(reset = true)
-    }
-
     FitxScreenScaffold(topBar = { ScreenTopBar("My Diary", onBack) }) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -97,15 +131,14 @@ fun NutritionRoute(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Surface(
+                Card(
                     shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -123,7 +156,11 @@ fun NutritionRoute(
                             )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(progress = { progress })
+                            CircularProgressIndicator(
+                                progress = { progress },
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                            )
                             Text("${(progress * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
                         }
                     }
@@ -153,11 +190,26 @@ fun NutritionRoute(
             item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(mealTypes) { type ->
-                        AssistChip(
+                        FilterChip(
+                            selected = selectedMealType == type,
                             onClick = { selectedMealType = type },
-                            label = { Text(type) }
+                            label = { Text(type) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                                selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
+                            )
                         )
                     }
+                }
+            }
+            item {
+                FilledTonalButton(
+                    onClick = { viewModel.copyYesterdayMeals() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Copy Yesterday Meals")
                 }
             }
 
@@ -169,17 +221,90 @@ fun NutritionRoute(
                 ) {
                     OutlinedTextField(
                         value = query,
-                        onValueChange = { query = it },
+                        onValueChange = {
+                            query = it
+                            viewModel.onSearchQueryChanged(it)
+                        },
                         label = { Text("Search food") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Search
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                viewModel.searchFoodsNow(query)
+                                keyboardController?.hide()
+                            }
+                        ),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
                     Button(
-                        onClick = { viewModel.searchFoods(query) },
-                        modifier = Modifier.height(56.dp)
+                        onClick = {
+                            viewModel.searchFoodsNow(query)
+                            keyboardController?.hide()
+                        },
+                        modifier = Modifier.height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Text("Find", modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = barcodeInput,
+                        onValueChange = { barcodeInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("Barcode (EAN/UPC)") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Search
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                viewModel.findFoodByBarcode(barcodeInput)
+                                keyboardController?.hide()
+                            }
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            viewModel.findFoodByBarcode(barcodeInput)
+                            keyboardController?.hide()
+                        },
+                        modifier = Modifier.height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Find")
+                    }
+                    Button(
+                        onClick = {
+                            val hostActivity = activity ?: return@Button
+                            val intent = IntentIntegrator(hostActivity)
+                                .setDesiredBarcodeFormats(IntentIntegrator.PRODUCT_CODE_TYPES)
+                                .setPrompt("Scan food barcode")
+                                .setBeepEnabled(false)
+                                .setOrientationLocked(false)
+                                .createScanIntent()
+                            barcodeScanLauncher.launch(intent)
+                        },
+                        enabled = activity != null,
+                        modifier = Modifier.height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null)
                     }
                 }
             }
@@ -201,15 +326,52 @@ fun NutritionRoute(
                             onClick = {
                                 if (quick == "All") {
                                     query = ""
+                                    viewModel.onSearchQueryChanged("")
                                     viewModel.loadAllFoods(reset = true)
                                 } else {
                                     query = quick
-                                    viewModel.searchFoods(quick)
+                                    viewModel.onSearchQueryChanged(quick)
+                                    viewModel.searchFoodsNow(quick)
                                 }
+                                keyboardController?.hide()
                             },
-                            label = { Text(quick) }
+                            label = { Text(quick) },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
+                                labelColor = MaterialTheme.colorScheme.onSurface
+                            )
                         )
                     }
+                }
+            }
+
+            if (favoriteFoods.isNotEmpty()) {
+                item {
+                    Text("Favorites", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                }
+                item {
+                    QuickFoodChips(
+                        foods = favoriteFoods.take(12),
+                        onAdd = { food ->
+                            val grams = gramsInput.toDoubleOrNull() ?: 100.0
+                            viewModel.addFood(food, selectedMealType, grams)
+                        }
+                    )
+                }
+            }
+
+            if (recentFoods.isNotEmpty()) {
+                item {
+                    Text("Recent", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                }
+                item {
+                    QuickFoodChips(
+                        foods = recentFoods.take(12),
+                        onAdd = { food ->
+                            val grams = gramsInput.toDoubleOrNull() ?: 100.0
+                            viewModel.addFood(food, selectedMealType, grams)
+                        }
+                    )
                 }
             }
 
@@ -220,7 +382,8 @@ fun NutritionRoute(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
                 ) {
                     Column(
                         modifier = Modifier
@@ -317,7 +480,8 @@ fun NutritionRoute(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
                 ) {
                     Column(
                         modifier = Modifier
@@ -377,6 +541,15 @@ fun NutritionRoute(
                     )
                 }
             }
+            if (!actionMessage.isNullOrBlank()) {
+                item {
+                    Text(
+                        text = actionMessage!!,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
 
             item {
                 Text("Search Results", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -387,10 +560,12 @@ fun NutritionRoute(
                 }
             }
             items(results, key = { it.fdcId }) { food ->
+                val isFavorite = favoriteIdentities.contains("${food.fdcId}_${food.name.trim().lowercase()}")
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.93f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.93f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                 ) {
                     Column(
                         modifier = Modifier
@@ -404,6 +579,13 @@ fun NutritionRoute(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(food.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { viewModel.toggleFavoriteFood(food) }) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = if (isFavorite) "Remove favorite" else "Mark favorite",
+                                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Button(onClick = {
                                 val grams = gramsInput.toDoubleOrNull() ?: 100.0
                                 viewModel.addFood(food, selectedMealType, grams)
@@ -416,6 +598,13 @@ fun NutritionRoute(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelMedium
                         )
+                        if (!food.barcode.isNullOrBlank()) {
+                            Text(
+                                "Barcode ${food.barcode}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TinyBadge(Icons.Default.LocalFireDepartment, "${food.calories.roundToInt()} kcal")
                             TinyBadge(Icons.Default.WaterDrop, "P ${"%.1f".format(food.protein)}")
@@ -472,7 +661,8 @@ private fun MacroTile(
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
     ) {
         Column(
             modifier = Modifier
@@ -482,6 +672,35 @@ private fun MacroTile(
         ) {
             Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
             Text(value, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? {
+    return when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+}
+
+@Composable
+private fun QuickFoodChips(
+    foods: List<FoodItem>,
+    onAdd: (FoodItem) -> Unit
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(foods, key = { "${it.fdcId}_${it.name}" }) { food ->
+            AssistChip(
+                onClick = { onAdd(food) },
+                label = {
+                    Text(food.name.take(30))
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.84f),
+                    labelColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
         }
     }
 }
@@ -507,7 +726,8 @@ private fun TinyBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
 private fun MealTypeSummaryCard(mealType: String, mealCount: Int, calories: Int) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
     ) {
         Column(
             modifier = Modifier
@@ -538,7 +758,8 @@ private fun MealRow(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
     ) {
         Row(
             modifier = Modifier
@@ -567,7 +788,8 @@ private fun EmptyCard(text: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.86f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.86f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
     ) {
         Text(text, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

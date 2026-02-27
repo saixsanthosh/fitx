@@ -12,6 +12,8 @@ data class TrackingState(
     val averageSpeedMps: Double = 0.0,
     val caloriesBurned: Int = 0,
     val steps: Int = 0,
+    val isAutoPaused: Boolean = false,
+    val autoPauseCount: Int = 0,
     val pathPoints: List<ActivityPoint> = emptyList()
 )
 

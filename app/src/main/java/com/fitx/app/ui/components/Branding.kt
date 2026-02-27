@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -32,11 +33,29 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun FitxBrandBackground(content: @Composable () -> Unit) {
+    val colors = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(colors.background)
     ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = colors.primary.copy(alpha = 0.06f),
+                radius = size.minDimension * 0.34f,
+                center = Offset(x = size.width * 0.92f, y = size.height * 0.1f)
+            )
+            drawCircle(
+                color = colors.primary.copy(alpha = 0.04f),
+                radius = size.minDimension * 0.42f,
+                center = Offset(x = size.width * 0.05f, y = size.height * 0.88f)
+            )
+            drawCircle(
+                color = colors.surfaceVariant.copy(alpha = 0.35f),
+                radius = size.minDimension * 0.2f,
+                center = Offset(x = size.width * 0.78f, y = size.height * 0.8f)
+            )
+        }
         content()
     }
 }
