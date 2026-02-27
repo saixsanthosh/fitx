@@ -395,10 +395,16 @@ class HabitViewModel @Inject constructor(
 class PlannerViewModel @Inject constructor(
     private val plannerRepository: PlannerRepository,
     private val taskReminderScheduler: TaskReminderScheduler,
+    settingsRepository: SettingsRepository,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
     private val _selectedDate = MutableStateFlow(DateUtils.todayEpochDay())
     val selectedDate: StateFlow<Long> = _selectedDate
+    val settings: StateFlow<SettingsPreferences> = settingsRepository.observeSettings().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = SettingsPreferences()
+    )
 
     val tasks = _selectedDate.flatMapLatest { date ->
         plannerRepository.observeTasks(date)

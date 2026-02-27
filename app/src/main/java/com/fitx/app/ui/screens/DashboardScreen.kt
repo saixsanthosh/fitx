@@ -31,8 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,7 +74,7 @@ fun DashboardRoute(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         }
     ) { padding ->
@@ -89,7 +87,10 @@ fun DashboardRoute(
             item {
                 AnimatedVisibility(
                     visible = animateCards,
-                    enter = fadeIn(animationSpec = tween(180)) + slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(220))
+                    enter = fadeIn(animationSpec = tween(220)) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(260)
+                    )
                 ) {
                     HeroCard(
                         completionPercent = completionPercent,
@@ -102,21 +103,22 @@ fun DashboardRoute(
             item {
                 AnimatedVisibility(
                     visible = animateCards,
-                    enter = fadeIn(animationSpec = tween(180, delayMillis = 60)) + slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(220, delayMillis = 60))
+                    enter = fadeIn(animationSpec = tween(220, delayMillis = 50)) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(260, delayMillis = 50)
+                    )
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatTile(
                             title = "BMI",
                             value = healthMetrics?.bmi?.let { "%.1f".format(it) } ?: "--",
                             subtitle = "Body index",
-                            accent = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.weight(1f)
                         )
                         StatTile(
                             title = "Daily Target",
                             value = healthMetrics?.dailyCalorieTarget?.let { "$it kcal" } ?: "--",
                             subtitle = "Calories",
-                            accent = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -126,21 +128,22 @@ fun DashboardRoute(
             item {
                 AnimatedVisibility(
                     visible = animateCards,
-                    enter = fadeIn(animationSpec = tween(180, delayMillis = 110)) + slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(220, delayMillis = 110))
+                    enter = fadeIn(animationSpec = tween(220, delayMillis = 100)) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(260, delayMillis = 100)
+                    )
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatTile(
                             title = "Activity",
                             value = "${"%.2f".format(summary.todayDistanceMeters / 1000)} km",
                             subtitle = "${summary.todaySteps} steps",
-                            accent = Color(0xFF22C55E),
                             modifier = Modifier.weight(1f)
                         )
                         StatTile(
                             title = "Tasks",
                             value = "${summary.completedTasks}/${summary.todayTasks.size}",
                             subtitle = "Completed",
-                            accent = Color(0xFF4FA7A0),
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -149,9 +152,9 @@ fun DashboardRoute(
 
             item {
                 Card(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.94f)
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
                 ) {
                     WeightLineChart(values = summary.weeklyWeights.map { it.weightKg }.reversed())
@@ -254,21 +257,13 @@ private fun HeroCard(
     )
     val completionText = animatedCompletion.toInt().coerceIn(0, 100)
     Card(
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        listOf(
-                            colors.primary.copy(alpha = 0.18f),
-                            colors.tertiary.copy(alpha = 0.14f),
-                            colors.secondary.copy(alpha = 0.16f)
-                        )
-                    )
-                )
+                .background(colors.surface)
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -283,7 +278,7 @@ private fun HeroCard(
             Box(
                 modifier = Modifier
                     .size(64.dp)
-                    .background(colors.surfaceVariant.copy(alpha = 0.75f), RoundedCornerShape(16.dp)),
+                    .background(colors.surfaceVariant.copy(alpha = 0.65f), RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -302,26 +297,18 @@ private fun StatTile(
     title: String,
     value: String,
     subtitle: String,
-    accent: Color,
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.95f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            accent.copy(alpha = 0.16f),
-                            colors.surfaceVariant.copy(alpha = 0.95f)
-                        )
-                    )
-                )
+                .background(colors.surface)
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
@@ -354,20 +341,13 @@ private fun ModuleCard(
     Card(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface.copy(alpha = 0.98f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            colors.surface.copy(alpha = 0.98f),
-                            colors.surfaceVariant.copy(alpha = 0.84f)
-                        )
-                    )
-                )
+                .background(colors.surface)
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -382,7 +362,7 @@ private fun DashboardTaskItem(task: TaskItem) {
     val colors = MaterialTheme.colorScheme
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.92f))
+        colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
         Row(
             modifier = Modifier
@@ -398,7 +378,11 @@ private fun DashboardTaskItem(task: TaskItem) {
                 }
             }
             val status = if (task.isCompleted) "Done" else "Pending"
-            Text(status, style = MaterialTheme.typography.labelLarge, color = if (task.isCompleted) Color(0xFF22C55E) else colors.secondary)
+            Text(
+                status,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (task.isCompleted) colors.primary else colors.onSurfaceVariant
+            )
         }
     }
 }

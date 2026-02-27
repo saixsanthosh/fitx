@@ -1,9 +1,12 @@
 package com.fitx.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 
 private val LightColors = lightColorScheme(
     primary = PrimaryLight,
@@ -41,6 +44,12 @@ private val DarkColors = darkColorScheme(
     onError = OnErrorDark
 )
 
+private val FitxShapes = Shapes(
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(16.dp)
+)
+
 @Composable
 fun FitxTheme(
     darkTheme: Boolean,
@@ -49,6 +58,7 @@ fun FitxTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = FitxTypography,
+        shapes = FitxShapes,
         content = content
     )
 }

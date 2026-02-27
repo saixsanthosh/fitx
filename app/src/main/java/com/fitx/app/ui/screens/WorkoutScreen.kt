@@ -30,8 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -71,20 +69,13 @@ fun WorkoutRoute(
         ) {
             item {
                 Card(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f),
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                                    )
-                                )
-                            )
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -107,7 +98,7 @@ fun WorkoutRoute(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Row(
                         modifier = Modifier
@@ -128,8 +119,8 @@ fun WorkoutRoute(
             item { SectionTitle("Templates") }
             item {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
@@ -166,7 +157,7 @@ fun WorkoutRoute(
             items(templates, key = { it.templateId }) { template ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f))
                 ) {
                     Row(
@@ -188,8 +179,8 @@ fun WorkoutRoute(
             item { SectionTitle("Quick Log") }
             item {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
@@ -266,7 +257,7 @@ private fun WorkoutStat(title: String, value: String, modifier: Modifier = Modif
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
     ) {
         Column(
             modifier = Modifier
@@ -287,15 +278,11 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun WorkoutLogRow(log: ExerciseLog) {
-    val intensityColor = when {
-        log.weightKg >= 60 -> Color(0xFFEF4444)
-        log.weightKg >= 30 -> Color(0xFFF59E0B)
-        else -> Color(0xFF10B981)
-    }
+    val intensityColor = MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
@@ -307,7 +294,7 @@ private fun WorkoutLogRow(log: ExerciseLog) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(log.exerciseName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(
-                    "${log.sets} sets  •  ${log.reps} reps  •  ${"%.1f".format(log.weightKg)} kg",
+                    "${log.sets} sets | ${log.reps} reps | ${"%.1f".format(log.weightKg)} kg",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (log.notes.isNotBlank()) {
@@ -315,7 +302,7 @@ private fun WorkoutLogRow(log: ExerciseLog) {
                 }
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Default.Speed, contentDescription = null, tint = intensityColor)
                     Text(
@@ -340,3 +327,4 @@ private fun EmptyWorkoutCard(text: String) {
         Text(text, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+

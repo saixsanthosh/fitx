@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
             FitxTheme(darkTheme = settings.darkTheme) {
                 Crossfade(
                     targetState = settings.darkTheme,
-                    animationSpec = tween(durationMillis = 220),
+                    animationSpec = tween(durationMillis = 260),
                     label = "theme_crossfade"
                 ) {
                     if (showSplash) {

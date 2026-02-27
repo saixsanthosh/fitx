@@ -17,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -37,11 +36,11 @@ fun MetricCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = colors.surfaceVariant.copy(alpha = 0.96f)
+            containerColor = colors.surface
         ),
-        shape = RoundedCornerShape(22.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = title.uppercase(),
                 style = MaterialTheme.typography.labelLarge,
@@ -77,15 +76,7 @@ fun WeightLineChart(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                brush = Brush.verticalGradient(
-                    listOf(
-                        colors.surfaceVariant.copy(alpha = 0.94f),
-                        colors.surface.copy(alpha = 0.98f)
-                    )
-                ),
-                shape = RoundedCornerShape(22.dp)
-            )
+            .background(colors.surface, shape = RoundedCornerShape(16.dp))
             .padding(14.dp)
     ) {
         Row(
@@ -133,8 +124,8 @@ fun RouteMapPreview(
     val colors = MaterialTheme.colorScheme
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.94f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Route Map", style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
@@ -142,7 +133,7 @@ fun RouteMapPreview(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(height)
-                    .background(colors.surface.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+                    .background(colors.surfaceVariant.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
                     .padding(10.dp)
             ) {
                 drawRoutePath(points = points, lineColor = colors.primary)
@@ -179,6 +170,6 @@ private fun DrawScope.drawRoutePath(points: List<ActivityPoint>, lineColor: Colo
     val end = project(points.last().latitude, points.last().longitude)
 
     drawPath(path = path, color = lineColor, style = Stroke(width = 6f))
-    drawCircle(color = Color(0xFF22C55E), radius = 8f, center = start)
-    drawCircle(color = Color(0xFFF97316), radius = 8f, center = end)
+    drawCircle(color = lineColor, radius = 8f, center = start)
+    drawCircle(color = lineColor.copy(alpha = 0.65f), radius = 8f, center = end)
 }

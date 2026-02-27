@@ -38,8 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -100,21 +98,14 @@ fun NutritionRoute(
         ) {
             item {
                 Surface(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 6.dp
+                    tonalElevation = 0.dp
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                brush = Brush.horizontalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)
-                                    )
-                                )
-                            )
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -144,19 +135,16 @@ fun NutritionRoute(
                     MacroTile(
                         title = "Protein",
                         value = "${totalProtein.roundToInt()} g",
-                        accent = Color(0xFF3B82F6),
                         modifier = Modifier.weight(1f)
                     )
                     MacroTile(
                         title = "Carbs",
                         value = "${totalCarbs.roundToInt()} g",
-                        accent = Color(0xFFF97316),
                         modifier = Modifier.weight(1f)
                     )
                     MacroTile(
                         title = "Fat",
                         value = "${totalFat.roundToInt()} g",
-                        accent = Color(0xFFEC4899),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -231,7 +219,7 @@ fun NutritionRoute(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
                 ) {
                     Column(
@@ -401,7 +389,7 @@ fun NutritionRoute(
             items(results, key = { it.fdcId }) { food ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.93f))
                 ) {
                     Column(
@@ -479,25 +467,16 @@ fun NutritionRoute(
 private fun MacroTile(
     title: String,
     value: String,
-    accent: Color,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            accent.copy(alpha = 0.16f),
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
-                        )
-                    )
-                )
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
@@ -518,7 +497,7 @@ private fun TinyBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
+            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
             Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
         }
     }
@@ -526,33 +505,27 @@ private fun TinyBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
 
 @Composable
 private fun MealTypeSummaryCard(mealType: String, mealCount: Int, calories: Int) {
-    val accent = when (mealType.lowercase()) {
-        "breakfast" -> Color(0xFFF97316)
-        "lunch" -> Color(0xFF3B82F6)
-        "snack" -> Color(0xFFEC4899)
-        "dinner" -> Color(0xFF8B5CF6)
-        else -> MaterialTheme.colorScheme.primary
-    }
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            accent.copy(alpha = 0.82f),
-                            accent.copy(alpha = 0.55f)
-                        )
-                    )
-                )
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Text(mealType, color = Color.White, fontWeight = FontWeight.Bold)
-            Text("$calories kcal", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("$mealCount items", color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelLarge)
+            Text(mealType, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+            Text(
+                "$calories kcal",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "$mealCount items",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }

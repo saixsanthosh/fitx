@@ -3,7 +3,7 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1A202A"
+    android:background="#12161D"
     android:orientation="vertical"
     android:padding="12dp">
 
@@ -22,7 +22,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:text="0 pending"
-        android:textColor="#7CD7CB"
+        android:textColor="#3A86FF"
         android:textSize="13sp"
         android:textStyle="bold" />
 
@@ -34,7 +34,7 @@
         android:layout_marginTop="6dp"
         android:max="100"
         android:progress="0"
-        android:progressTint="#4FA7A0" />
+        android:progressTint="#3A86FF" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -63,11 +63,11 @@
                 android:id="@+id/widget_done_1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#2A394A"
+                android:background="#202734"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="4dp"
                 android:text="Done"
-                android:textColor="#AEE6DD"
+                android:textColor="#3A86FF"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -92,11 +92,11 @@
                 android:id="@+id/widget_done_2"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#2A394A"
+                android:background="#202734"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="4dp"
                 android:text="Done"
-                android:textColor="#AEE6DD"
+                android:textColor="#3A86FF"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -121,11 +121,11 @@
                 android:id="@+id/widget_done_3"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#2A394A"
+                android:background="#202734"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="4dp"
                 android:text="Done"
-                android:textColor="#AEE6DD"
+                android:textColor="#3A86FF"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -149,11 +149,11 @@
                 android:id="@+id/widget_done_4"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#2A394A"
+                android:background="#202734"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="4dp"
                 android:text="Done"
-                android:textColor="#AEE6DD"
+                android:textColor="#3A86FF"
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>

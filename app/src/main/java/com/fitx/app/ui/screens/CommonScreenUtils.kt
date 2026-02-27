@@ -2,6 +2,8 @@ package com.fitx.app.ui.screens
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -33,8 +35,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fitx.app.domain.model.TaskItem
@@ -48,18 +50,10 @@ fun FitxScreenScaffold(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        colors.background,
-                        colors.surfaceVariant.copy(alpha = 0.92f),
-                        colors.background.copy(alpha = 0.98f)
-                    )
-                )
-            )
+            .background(colors.background)
     ) {
         Scaffold(
-            containerColor = Color.Transparent,
+            containerColor = colors.background,
             topBar = topBar,
             content = content
         )
@@ -93,10 +87,17 @@ fun TaskRow(
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit
 ) {
+    val rowAlpha = animateFloatAsState(
+        targetValue = if (task.isCompleted) 0.58f else 1f,
+        animationSpec = tween(durationMillis = 240),
+        label = "task_row_alpha"
+    )
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(rowAlpha.value),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
+            containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Row(
@@ -170,7 +171,7 @@ fun ScreenTopBar(title: String, onBack: () -> Unit) {
     TopAppBar(
         title = { Text(title) },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
+            containerColor = MaterialTheme.colorScheme.background,
             titleContentColor = MaterialTheme.colorScheme.onBackground
         ),
         navigationIcon = {

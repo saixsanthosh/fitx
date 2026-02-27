@@ -5,12 +5,12 @@ package com.fitx.app.ui.screens
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +52,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -71,6 +71,7 @@ import com.fitx.app.util.BatteryOptimizationHelper
 import com.fitx.app.util.DateUtils
 import com.fitx.app.util.PermissionUtils
 import kotlin.math.floor
+import kotlinx.coroutines.delay
 
 @Composable
 fun ActivityStartRoute(
@@ -114,20 +115,13 @@ fun ActivityStartRoute(
         ) {
             item {
                 Card(
-                    shape = RoundedCornerShape(26.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
-                                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)
-                                    )
-                                )
-                            )
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -208,7 +202,21 @@ fun LiveTrackingRoute(
     val speedKmh = state.averageSpeedMps * 3.6
     val distanceGoalKm = if (state.activityType == ActivityType.WALKING) 5.0 else 20.0
     val progress = (distanceKm / distanceGoalKm).toFloat().coerceIn(0f, 1f)
-    val pulse = rememberTrackingPulse(state.isTracking)
+    val animatedDistanceKm by animateFloatAsState(
+        targetValue = distanceKm.toFloat(),
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "live_distance_km"
+    )
+    val animatedSpeedKmh by animateFloatAsState(
+        targetValue = speedKmh.toFloat(),
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "live_speed_kmh"
+    )
+    val liveDotScale by animateFloatAsState(
+        targetValue = if (state.isTracking) 1.08f else 1f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "live_dot_scale"
+    )
 
     val milestoneStepKm = if (state.activityType == ActivityType.WALKING) 1 else 2
     val milestoneCount = floor(distanceKm / milestoneStepKm.toDouble()).toInt()
@@ -225,8 +233,16 @@ fun LiveTrackingRoute(
     }
 
     val primaryTitle = if (state.activityType == ActivityType.CYCLING) "Current Speed" else "Distance"
-    val primaryValue = if (state.activityType == ActivityType.CYCLING) "${"%.2f".format(speedKmh)} km/h" else "${"%.2f".format(distanceKm)} km"
-    val secondaryValue = if (state.activityType == ActivityType.CYCLING) "${"%.2f".format(distanceKm)} km" else "${"%.2f".format(speedKmh)} km/h"
+    val primaryValue = if (state.activityType == ActivityType.CYCLING) {
+        "${"%.2f".format(animatedSpeedKmh)} km/h"
+    } else {
+        "${"%.2f".format(animatedDistanceKm)} km"
+    }
+    val secondaryValue = if (state.activityType == ActivityType.CYCLING) {
+        "${"%.2f".format(animatedDistanceKm)} km"
+    } else {
+        "${"%.2f".format(animatedSpeedKmh)} km/h"
+    }
     val secondaryTitle = if (state.activityType == ActivityType.CYCLING) "Distance" else "Current Speed"
 
     FitxScreenScaffold(topBar = { ScreenTopBar("Live Tracking", onBack) }) { padding ->
@@ -238,18 +254,11 @@ fun LiveTrackingRoute(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
-                                    )
-                                )
-                            )
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -257,8 +266,11 @@ fun LiveTrackingRoute(
                             Text(state.activityType.name.lowercase().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Box(
                                 modifier = Modifier
-                                    .size((14.dp.value * pulse).dp)
-                                    .background(if (state.isTracking) Color(0xFF22C55E) else MaterialTheme.colorScheme.outline, RoundedCornerShape(50))
+                                    .size((12.dp.value * liveDotScale).dp)
+                                    .background(
+                                        if (state.isTracking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(50)
+                                    )
                             )
                         }
                         Text(primaryTitle, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -313,8 +325,8 @@ fun ActivityHistoryRoute(
             if (sessions.isEmpty()) {
                 item {
                     Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Text(
                             "No sessions yet. Start a walking or cycling session first.",
@@ -325,21 +337,16 @@ fun ActivityHistoryRoute(
                 }
             }
             items(sessions, key = { it.sessionId }) { session ->
-                val accent = if (session.activityType == ActivityType.WALKING) Color(0xFF22C55E) else Color(0xFF38BDF8)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     onClick = { onSessionClick(session.sessionId) }
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(accent.copy(alpha = 0.16f), MaterialTheme.colorScheme.surface.copy(alpha = 0.98f))
-                                )
-                            )
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -407,6 +414,9 @@ fun ActivityFinishRoute(
     val view = LocalView.current
     var showSharePreview by rememberSaveable { mutableStateOf(false) }
     var hapticDoneForSession by rememberSaveable { mutableStateOf(0L) }
+    var showSummary by rememberSaveable { mutableStateOf(false) }
+    var showStats by rememberSaveable { mutableStateOf(false) }
+    var showMessage by rememberSaveable { mutableStateOf(false) }
 
     val latestSession = sessions.firstOrNull()
     val summaryMessage = latestSession?.let { buildAppreciationMessage(it) }
@@ -415,13 +425,38 @@ fun ActivityFinishRoute(
     } ?: 0.0
     val animatedPrimary by animateFloatAsState(
         targetValue = primaryTarget.toFloat(),
-        animationSpec = tween(durationMillis = 780, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
         label = "primary_count_up"
     )
-    val pulse = rememberPrimaryPulse()
+    val primaryScale = remember { Animatable(1f) }
+    val summaryAlpha by animateFloatAsState(
+        targetValue = if (showSummary || latestSession == null) 1f else 0f,
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        label = "session_summary_alpha"
+    )
+    val routePoints = detail?.points
 
     LaunchedEffect(latestSession?.sessionId) {
-        if (latestSession != null) viewModel.loadSession(latestSession.sessionId)
+        val session = latestSession
+        if (session == null) {
+            showSummary = true
+            showStats = false
+            showMessage = false
+            return@LaunchedEffect
+        }
+        viewModel.loadSession(session.sessionId)
+        showSummary = false
+        showStats = false
+        showMessage = false
+        delay(50)
+        showSummary = true
+        primaryScale.snapTo(1f)
+        primaryScale.animateTo(1.04f, animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing))
+        primaryScale.animateTo(1f, animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing))
+        delay(120)
+        showStats = true
+        delay(100)
+        showMessage = true
     }
     LaunchedEffect(latestSession?.sessionId, settings.hapticsEnabled) {
         val sessionId = latestSession?.sessionId ?: return@LaunchedEffect
@@ -436,63 +471,88 @@ fun ActivityFinishRoute(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(12.dp),
+                .padding(12.dp)
+                .alpha(summaryAlpha),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (latestSession == null) {
                 item { MetricCard("No session found", "Start a new walk or ride", "Your next completed session will appear here.") }
             } else {
                 item {
-                    Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.94f)
-                                        )
-                                    )
-                                )
+                                .background(MaterialTheme.colorScheme.surface)
                                 .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text("Great work", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(summaryMessage.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Session Complete", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            AnimatedVisibility(
+                                visible = showMessage,
+                                enter = fadeIn(animationSpec = tween(220))
+                            ) {
+                                Text(summaryMessage.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             Text(
                                 text = if (latestSession.activityType == ActivityType.CYCLING) "${"%.2f".format(animatedPrimary)} km/h avg" else "${"%.2f".format(animatedPrimary)} km",
                                 style = MaterialTheme.typography.displaySmall,
                                 fontWeight = FontWeight.ExtraBold,
                                 modifier = Modifier
+                                    .graphicsLayer {
+                                        scaleX = primaryScale.value
+                                        scaleY = primaryScale.value
+                                    }
                                     .padding(top = 2.dp)
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
-                                    .padding(horizontal = (12.dp.value * pulse).dp, vertical = 6.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
                     }
                 }
-                if (detail != null) item { RouteMapPreview(points = detail!!.points, height = 180.dp) }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MetricCard("Duration", DateUtils.formatDuration(latestSession.durationSeconds), modifier = Modifier.weight(1f))
-                        MetricCard("Calories", "${latestSession.caloriesBurned} kcal", modifier = Modifier.weight(1f))
+                    AnimatedVisibility(
+                        visible = showStats && routePoints != null,
+                        enter = fadeIn(animationSpec = tween(220)) + slideInVertically(initialOffsetY = { it / 4 }, animationSpec = tween(260))
+                    ) {
+                        RouteMapPreview(points = routePoints.orEmpty(), height = 180.dp)
                     }
                 }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MetricCard("Distance", "${"%.2f".format(latestSession.distanceMeters / 1000)} km", modifier = Modifier.weight(1f))
-                        MetricCard("Steps", latestSession.steps.toString(), modifier = Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { showSharePreview = true }, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Default.Share, contentDescription = null)
-                            Text("Share", modifier = Modifier.padding(start = 6.dp))
+                    AnimatedVisibility(
+                        visible = showStats,
+                        enter = fadeIn(animationSpec = tween(220)) + slideInVertically(initialOffsetY = { it / 4 }, animationSpec = tween(260))
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MetricCard("Duration", DateUtils.formatDuration(latestSession.durationSeconds), modifier = Modifier.weight(1f))
+                            MetricCard("Calories", "${latestSession.caloriesBurned} kcal", modifier = Modifier.weight(1f))
                         }
-                        FilledTonalButton(onClick = onOpenHistory, modifier = Modifier.weight(1f)) {
-                            Text("Open History")
+                    }
+                }
+                item {
+                    AnimatedVisibility(
+                        visible = showStats,
+                        enter = fadeIn(animationSpec = tween(220, delayMillis = 50)) + slideInVertically(initialOffsetY = { it / 4 }, animationSpec = tween(260, delayMillis = 50))
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MetricCard("Distance", "${"%.2f".format(latestSession.distanceMeters / 1000)} km", modifier = Modifier.weight(1f))
+                            MetricCard("Steps", latestSession.steps.toString(), modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                item {
+                    AnimatedVisibility(
+                        visible = showStats,
+                        enter = fadeIn(animationSpec = tween(220, delayMillis = 100)) + slideInVertically(initialOffsetY = { it / 4 }, animationSpec = tween(260, delayMillis = 100))
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { showSharePreview = true }, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.Share, contentDescription = null)
+                                Text("Share", modifier = Modifier.padding(start = 6.dp))
+                            }
+                            FilledTonalButton(onClick = onOpenHistory, modifier = Modifier.weight(1f)) {
+                                Text("Open History")
+                            }
                         }
                     }
                 }
@@ -551,9 +611,9 @@ private fun ActivityTypeCard(
     Card(
         modifier = modifier,
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) colors.primary.copy(alpha = 0.18f) else colors.surfaceVariant.copy(alpha = 0.9f)
+            containerColor = if (selected) colors.primary.copy(alpha = 0.14f) else colors.surface
         )
     ) {
         Column(
@@ -576,11 +636,11 @@ private fun PermissionChipCard(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val accent = if (ok) Color(0xFF22C55E) else colors.secondary
+    val accent = if (ok) colors.primary else colors.outline
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f))
+        colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
         Row(
             modifier = Modifier
@@ -617,8 +677,8 @@ private fun ActivityMiniMetric(
     val colors = MaterialTheme.colorScheme
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
         Column(
             modifier = Modifier
@@ -626,33 +686,9 @@ private fun ActivityMiniMetric(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = colors.tertiary)
+            Icon(icon, contentDescription = null, tint = colors.primary)
             Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colors.onSurface)
         }
     }
-}
-
-@Composable
-private fun rememberTrackingPulse(isTracking: Boolean): Float {
-    val transition = rememberInfiniteTransition(label = "live_pulse")
-    val scale by transition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(animation = tween(900, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "pulse_scale"
-    )
-    return if (isTracking) scale else 1f
-}
-
-@Composable
-private fun rememberPrimaryPulse(): Float {
-    val transition = rememberInfiniteTransition(label = "summary_pulse")
-    val scale by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(animation = tween(900, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "summary_scale"
-    )
-    return scale
 }
