@@ -40,7 +40,15 @@ android {
         }
 
         val usdaApiKey = (project.findProperty("USDA_API_KEY") as String?) ?: ""
+        val updateInfoUrl =
+            (project.findProperty("UPDATE_INFO_URL") as String?)
+                ?: "https://raw.githubusercontent.com/saixsanthosh/fitx/main/version.json"
+        val updateFallbackUrl =
+            (project.findProperty("UPDATE_FALLBACK_URL") as String?)
+                ?: "https://github.com/saixsanthosh/fitx/releases/latest"
         buildConfigField("String", "USDA_API_KEY", "\"$usdaApiKey\"")
+        buildConfigField("String", "UPDATE_INFO_URL", "\"$updateInfoUrl\"")
+        buildConfigField("String", "UPDATE_FALLBACK_URL", "\"$updateFallbackUrl\"")
     }
 
     signingConfigs {

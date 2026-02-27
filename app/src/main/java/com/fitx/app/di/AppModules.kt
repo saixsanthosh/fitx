@@ -15,7 +15,9 @@ import com.fitx.app.data.local.dao.TaskDao
 import com.fitx.app.data.local.dao.UserProfileDao
 import com.fitx.app.data.local.dao.WeightDao
 import com.fitx.app.data.local.dao.WorkoutDao
+import com.fitx.app.data.remote.AppUpdateApiService
 import com.fitx.app.data.remote.UsdaApiService
+import com.fitx.app.data.repository.AppUpdateRepositoryImpl
 import com.fitx.app.data.repository.ActivityRepositoryImpl
 import com.fitx.app.data.repository.AuthRepositoryImpl
 import com.fitx.app.data.repository.HabitRepositoryImpl
@@ -25,6 +27,7 @@ import com.fitx.app.data.repository.SettingsRepositoryImpl
 import com.fitx.app.data.repository.UserProfileRepositoryImpl
 import com.fitx.app.data.repository.WeightRepositoryImpl
 import com.fitx.app.data.repository.WorkoutRepositoryImpl
+import com.fitx.app.domain.repository.AppUpdateRepository
 import com.fitx.app.domain.repository.ActivityRepository
 import com.fitx.app.domain.repository.AuthRepository
 import com.fitx.app.domain.repository.HabitRepository
@@ -120,6 +123,12 @@ object NetworkModule {
     fun provideUsdaApiService(retrofit: Retrofit): UsdaApiService {
         return retrofit.create(UsdaApiService::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideAppUpdateApiService(retrofit: Retrofit): AppUpdateApiService {
+        return retrofit.create(AppUpdateApiService::class.java)
+    }
 }
 
 @Module
@@ -175,4 +184,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    abstract fun bindAppUpdateRepository(impl: AppUpdateRepositoryImpl): AppUpdateRepository
 }

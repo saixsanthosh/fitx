@@ -22,6 +22,14 @@ Fitx is distributed for free outside Play Store using:
 2. Install it directly over the existing Fitx app.
 3. Keep the same package name and signing key to preserve app updates/data.
 
+## In-app update popup
+
+Fitx checks `version.json` from this repository at startup (after sign-in) and compares it with `BuildConfig.VERSION_NAME`.
+
+- If `latestVersion` is newer, the app shows an update dialog with message + download button.
+- Last prompted version is saved locally, so users are not repeatedly prompted for the same version.
+- Config file path: `version.json` (repo root)
+
 ## Optional integrity check (recommended)
 
 Each release also includes `SHA256.txt`.
@@ -48,6 +56,7 @@ Compare the result with the hash in `SHA256.txt`.
 - `fitx-vX.Y.Z-release.apk`
 - `SHA256.txt`
 5. Create GitHub tag/release (example `v1.0.0`) and upload both files.
+6. Update `version.json` with the new version/message/download URL and commit it.
 
 ## Main modules
 
