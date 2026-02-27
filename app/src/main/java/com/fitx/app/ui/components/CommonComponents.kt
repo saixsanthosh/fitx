@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Card
@@ -17,9 +18,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.fitx.app.domain.model.ActivityPoint
 
 @Composable
 fun MetricCard(
@@ -117,4 +122,63 @@ fun WeightLineChart(
             )
         }
     }
+}
+
+@Composable
+fun RouteMapPreview(
+    points: List<ActivityPoint>,
+    modifier: Modifier = Modifier,
+    height: Dp = 180.dp
+) {
+    val colors = MaterialTheme.colorScheme
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.94f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Route Map", style = MaterialTheme.typography.titleSmall, color = colors.onSurface)
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(height)
+                    .background(colors.surface.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+                    .padding(10.dp)
+            ) {
+                drawRoutePath(points = points, lineColor = colors.primary)
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawRoutePath(points: List<ActivityPoint>, lineColor: Color) {
+    if (points.size < 2) return
+
+    val lats = points.map { it.latitude }
+    val lons = points.map { it.longitude }
+    val minLat = lats.minOrNull() ?: return
+    val maxLat = lats.maxOrNull() ?: return
+    val minLon = lons.minOrNull() ?: return
+    val maxLon = lons.maxOrNull() ?: return
+    val latRange = (maxLat - minLat).takeIf { it > 0.0 } ?: 1.0
+    val lonRange = (maxLon - minLon).takeIf { it > 0.0 } ?: 1.0
+
+    fun project(lat: Double, lon: Double): Offset {
+        val x = ((lon - minLon) / lonRange).toFloat() * size.width
+        val y = size.height - (((lat - minLat) / latRange).toFloat() * size.height)
+        return Offset(x, y)
+    }
+
+    val path = Path()
+    points.forEachIndexed { index, point ->
+        val p = project(point.latitude, point.longitude)
+        if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+    }
+
+    val start = project(points.first().latitude, points.first().longitude)
+    val end = project(points.last().latitude, points.last().longitude)
+
+    drawPath(path = path, color = lineColor, style = Stroke(width = 6f))
+    drawCircle(color = Color(0xFF22C55E), radius = 8f, center = start)
+    drawCircle(color = Color(0xFFF97316), radius = 8f, center = end)
 }

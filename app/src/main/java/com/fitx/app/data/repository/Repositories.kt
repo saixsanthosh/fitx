@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.room.withTransaction
 import com.fitx.app.BuildConfig
 import com.fitx.app.data.local.AppDatabase
@@ -24,10 +25,12 @@ import com.fitx.app.domain.model.ActivityPoint
 import com.fitx.app.domain.model.ActivitySession
 import com.fitx.app.domain.model.ActivitySessionDetail
 import com.fitx.app.domain.model.AuthUser
+import com.fitx.app.domain.model.CustomFood
 import com.fitx.app.domain.model.FoodItem
 import com.fitx.app.domain.model.Habit
 import com.fitx.app.domain.model.HabitProgress
 import com.fitx.app.domain.model.MealEntry
+import com.fitx.app.domain.model.ServingPreset
 import com.fitx.app.domain.model.SettingsPreferences
 import com.fitx.app.domain.model.TaskItem
 import com.fitx.app.domain.model.UserProfile
@@ -49,12 +52,15 @@ import com.fitx.app.util.DateUtils
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
@@ -164,6 +170,10 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override fun observeExerciseLogs(dateEpochDay: Long): Flow<List<ExerciseLog>> {
         return workoutDao.observeExerciseLogs(dateEpochDay).map { list -> list.map { it.toDomain() } }
+    }
+
+    override fun observeAllExerciseLogs(): Flow<List<ExerciseLog>> {
+        return workoutDao.observeAllExerciseLogs().map { list -> list.map { it.toDomain() } }
     }
 
     override suspend fun addTemplate(template: WorkoutTemplate) {
@@ -350,7 +360,9 @@ class NutritionRepositoryImpl @Inject constructor(
     private val mealDao: MealDao,
     private val usdaApiService: UsdaApiService,
     private val syncQueueRepository: SyncQueueRepository,
-    private val cloudSyncScheduler: CloudSyncScheduler
+    private val cloudSyncScheduler: CloudSyncScheduler,
+    private val dataStore: DataStore<Preferences>,
+    private val gson: Gson
 ) : NutritionRepository {
     override suspend fun searchFoods(query: String): List<FoodItem> {
         val normalizedQuery = query.trim()
@@ -422,6 +434,35 @@ class NutritionRepositoryImpl @Inject constructor(
         cloudSyncScheduler.syncNow()
     }
 
+    override fun observeCustomFoods(): Flow<List<CustomFood>> {
+        return dataStore.data.map { prefs ->
+            parseCustomFoodsJson(prefs[CUSTOM_FOODS_KEY].orEmpty())
+        }
+    }
+
+    override suspend fun saveCustomFood(customFood: CustomFood) {
+        val foods = observeCustomFoods().first().toMutableList()
+        val existing = foods.indexOfFirst { it.id == customFood.id || it.name.equals(customFood.name, ignoreCase = true) }
+        if (existing >= 0) {
+            foods[existing] = customFood
+        } else {
+            foods.add(customFood)
+        }
+        writeCustomFoods(foods)
+    }
+
+    override suspend fun saveServingPreset(foodId: String, preset: ServingPreset) {
+        val foods = observeCustomFoods().first().toMutableList()
+        val index = foods.indexOfFirst { it.id == foodId }
+        if (index < 0) return
+        val current = foods[index]
+        val nextServings = (current.servings + preset)
+            .distinctBy { "${it.label.lowercase()}_${it.grams}" }
+            .sortedBy { it.grams }
+        foods[index] = current.copy(servings = nextServings)
+        writeCustomFoods(foods)
+    }
+
     private fun FoodDto.toFoodItem(): FoodItem {
         val calories = nutrientValue("energy")
         val protein = nutrientValue("protein")
@@ -479,10 +520,27 @@ class NutritionRepositoryImpl @Inject constructor(
             .take(250)
             .toList()
     }
+
+    private fun parseCustomFoodsJson(json: String): List<CustomFood> {
+        if (json.isBlank()) return emptyList()
+        return runCatching {
+            val listType = object : TypeToken<List<CustomFood>>() {}.type
+            gson.fromJson<List<CustomFood>>(json, listType) ?: emptyList()
+        }.getOrElse { emptyList() }
+    }
+
+    private suspend fun writeCustomFoods(foods: List<CustomFood>) {
+        val json = gson.toJson(foods)
+        dataStore.edit { prefs ->
+            prefs[CUSTOM_FOODS_KEY] = json
+        }
+    }
 }
 
 private val DARK_THEME_KEY = booleanPreferencesKey("dark_theme_enabled")
 private val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
+private val HAPTICS_KEY = booleanPreferencesKey("haptics_enabled")
+private val CUSTOM_FOODS_KEY = stringPreferencesKey("custom_foods_json")
 
 @Singleton
 class SettingsRepositoryImpl @Inject constructor(
@@ -492,7 +550,8 @@ class SettingsRepositoryImpl @Inject constructor(
         return dataStore.data.map { prefs ->
             SettingsPreferences(
                 darkTheme = prefs[DARK_THEME_KEY] ?: true,
-                notificationsEnabled = prefs[NOTIFICATIONS_KEY] ?: true
+                notificationsEnabled = prefs[NOTIFICATIONS_KEY] ?: true,
+                hapticsEnabled = prefs[HAPTICS_KEY] ?: true
             )
         }
     }
@@ -503,6 +562,10 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setNotifications(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[NOTIFICATIONS_KEY] = enabled }
+    }
+
+    override suspend fun setHaptics(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[HAPTICS_KEY] = enabled }
     }
 }
 

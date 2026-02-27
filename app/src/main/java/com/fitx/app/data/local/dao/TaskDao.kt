@@ -44,4 +44,22 @@ interface TaskDao {
             "timeMinutesOfDay ASC, taskId DESC LIMIT 1"
     )
     suspend fun getTopPendingTask(dateEpochDay: Long): TaskEntity?
+
+    @Query(
+        "SELECT * FROM task_item " +
+            "WHERE (dateEpochDay = :dateEpochDay OR repeatDaily = 1) AND isCompleted = 0 " +
+            "ORDER BY priority DESC, " +
+            "CASE WHEN timeMinutesOfDay IS NULL THEN 1 ELSE 0 END, " +
+            "timeMinutesOfDay ASC, taskId DESC LIMIT :limit"
+    )
+    suspend fun getTopPendingTasks(dateEpochDay: Long, limit: Int): List<TaskEntity>
+
+    @Query(
+        "SELECT COUNT(*) FROM task_item " +
+            "WHERE dateEpochDay = :dateEpochDay OR repeatDaily = 1"
+    )
+    suspend fun getTaskCountForDate(dateEpochDay: Long): Int
+
+    @Query("UPDATE task_item SET isCompleted = 1 WHERE taskId = :taskId")
+    suspend fun completeTask(taskId: Long)
 }

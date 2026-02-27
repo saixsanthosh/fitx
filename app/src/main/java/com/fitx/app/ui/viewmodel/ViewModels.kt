@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fitx.app.domain.model.ActivitySessionDetail
 import com.fitx.app.domain.model.ActivityType
+import com.fitx.app.domain.model.CustomFood
 import com.fitx.app.domain.model.ExerciseLog
 import com.fitx.app.domain.model.FoodItem
 import com.fitx.app.domain.model.GoalType
@@ -19,6 +20,7 @@ import com.fitx.app.domain.model.TaskItem
 import com.fitx.app.domain.model.UserProfile
 import com.fitx.app.domain.model.WeightEntry
 import com.fitx.app.domain.model.WorkoutTemplate
+import com.fitx.app.domain.model.ServingPreset
 import com.fitx.app.domain.repository.ActivityRepository
 import com.fitx.app.domain.repository.HabitRepository
 import com.fitx.app.domain.repository.NutritionRepository
@@ -44,9 +46,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.round
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -154,6 +158,7 @@ class ProfileViewModel @Inject constructor(
 class ActivityViewModel @Inject constructor(
     private val activityRepository: ActivityRepository,
     userProfileRepository: UserProfileRepository,
+    settingsRepository: SettingsRepository,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -163,6 +168,12 @@ class ActivityViewModel @Inject constructor(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList()
+    )
+
+    val settings = settingsRepository.observeSettings().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = SettingsPreferences()
     )
 
     private val selectedSessionId = MutableStateFlow<Long?>(null)
@@ -270,6 +281,12 @@ class WeightViewModel @Inject constructor(
 class WorkoutViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository
 ) : ViewModel() {
+    data class PersonalRecord(
+        val exerciseName: String,
+        val maxWeightKg: Double,
+        val maxVolume: Double
+    )
+
     val templates = workoutRepository.observeTemplates().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -284,6 +301,29 @@ class WorkoutViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList()
     )
+
+    val personalRecords = workoutRepository.observeAllExerciseLogs()
+        .map { logs ->
+            logs
+                .groupBy { it.exerciseName.trim().lowercase() }
+                .map { (_, exerciseLogs) ->
+                    val displayName = exerciseLogs.first().exerciseName.trim()
+                    val maxWeight = exerciseLogs.maxOf { it.weightKg }
+                    val maxVolume = exerciseLogs.maxOf { it.weightKg * it.sets * it.reps }
+                    PersonalRecord(
+                        exerciseName = displayName,
+                        maxWeightKg = maxWeight,
+                        maxVolume = maxVolume
+                    )
+                }
+                .sortedByDescending { it.maxVolume }
+                .take(8)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
 
     fun addTemplate(name: String, description: String) {
         if (name.isBlank()) return
@@ -452,6 +492,12 @@ class NutritionViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
+    val customFoods = nutritionRepository.observeCustomFoods().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
     private val _results = MutableStateFlow<List<FoodItem>>(emptyList())
     val results: StateFlow<List<FoodItem>> = _results
 
@@ -557,27 +603,101 @@ class NutritionViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val safeGrams = grams.coerceAtLeast(1.0)
-            val ratio = safeGrams / foodItem.baseGrams.coerceAtLeast(1.0)
+            val base = foodItem.baseGrams.coerceAtLeast(1.0)
+            val caloriesPer100 = (foodItem.calories / base) * 100.0
+            val proteinPer100 = (foodItem.protein / base) * 100.0
+            val carbsPer100 = (foodItem.carbs / base) * 100.0
+            val fatPer100 = (foodItem.fat / base) * 100.0
             nutritionRepository.addMeal(
                 MealEntry(
                     dateEpochDay = _selectedDate.value,
                     mealType = mealType,
                     foodName = foodItem.name,
                     grams = safeGrams,
-                    calories = foodItem.calories * ratio,
-                    protein = foodItem.protein * ratio,
-                    carbs = foodItem.carbs * ratio,
-                    fat = foodItem.fat * ratio,
+                    calories = round1((caloriesPer100 * safeGrams) / 100.0),
+                    protein = round1((proteinPer100 * safeGrams) / 100.0),
+                    carbs = round1((carbsPer100 * safeGrams) / 100.0),
+                    fat = round1((fatPer100 * safeGrams) / 100.0),
                     source = "USDA_ONLINE"
                 )
             )
         }
     }
 
+    fun saveCustomFood(
+        name: String,
+        caloriesPer100g: Double,
+        proteinPer100g: Double,
+        carbsPer100g: Double,
+        fatPer100g: Double,
+        servingLabel: String?,
+        servingGrams: Double?
+    ) {
+        val normalizedName = name.trim()
+        if (normalizedName.isBlank()) return
+        val id = normalizedName.lowercase().replace(Regex("\\s+"), "_")
+        val presets = if (!servingLabel.isNullOrBlank() && servingGrams != null && servingGrams > 0.0) {
+            listOf(ServingPreset(label = servingLabel.trim(), grams = servingGrams))
+        } else {
+            emptyList()
+        }
+        viewModelScope.launch {
+            nutritionRepository.saveCustomFood(
+                CustomFood(
+                    id = id,
+                    name = normalizedName,
+                    caloriesPer100g = caloriesPer100g.coerceAtLeast(0.0),
+                    proteinPer100g = proteinPer100g.coerceAtLeast(0.0),
+                    carbsPer100g = carbsPer100g.coerceAtLeast(0.0),
+                    fatPer100g = fatPer100g.coerceAtLeast(0.0),
+                    servings = presets
+                )
+            )
+        }
+    }
+
+    fun saveServingPreset(foodId: String, label: String, grams: Double) {
+        val normalizedLabel = label.trim().ifBlank { "${round1(grams)} g" }
+        val safeGrams = grams.coerceAtLeast(1.0)
+        viewModelScope.launch {
+            nutritionRepository.saveServingPreset(
+                foodId = foodId,
+                preset = ServingPreset(label = normalizedLabel, grams = safeGrams)
+            )
+        }
+    }
+
+    fun addCustomFood(food: CustomFood, mealType: String = "Meal", grams: Double) {
+        val safeGrams = grams.coerceAtLeast(1.0)
+        viewModelScope.launch {
+            nutritionRepository.addMeal(
+                MealEntry(
+                    dateEpochDay = _selectedDate.value,
+                    mealType = mealType,
+                    foodName = food.name,
+                    grams = safeGrams,
+                    calories = round1((food.caloriesPer100g * safeGrams) / 100.0),
+                    protein = round1((food.proteinPer100g * safeGrams) / 100.0),
+                    carbs = round1((food.carbsPer100g * safeGrams) / 100.0),
+                    fat = round1((food.fatPer100g * safeGrams) / 100.0),
+                    source = "CUSTOM"
+                )
+            )
+        }
+    }
+
+    fun addCustomFoodServing(food: CustomFood, mealType: String, serving: ServingPreset) {
+        addCustomFood(food = food, mealType = mealType, grams = serving.grams)
+    }
+
     fun deleteMeal(mealEntryId: Long) {
         viewModelScope.launch {
             nutritionRepository.deleteMeal(mealEntryId)
         }
+    }
+
+    private fun round1(value: Double): Double {
+        return round(value * 10.0) / 10.0
     }
 }
 
@@ -610,6 +730,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setNotifications(enabled)
             reminderScheduler.syncReminders(enabled)
+        }
+    }
+
+    fun setHaptics(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setHaptics(enabled)
         }
     }
 

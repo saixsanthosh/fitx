@@ -22,3 +22,18 @@ data class MealEntry(
     val fat: Double,
     val source: String
 )
+
+data class ServingPreset(
+    val label: String,
+    val grams: Double
+)
+
+data class CustomFood(
+    val id: String,
+    val name: String,
+    val caloriesPer100g: Double,
+    val proteinPer100g: Double,
+    val carbsPer100g: Double,
+    val fatPer100g: Double,
+    val servings: List<ServingPreset> = emptyList()
+)

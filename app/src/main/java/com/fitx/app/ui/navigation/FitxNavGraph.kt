@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.fitx.app.ui.screens.ActivityHistoryRoute
+import com.fitx.app.ui.screens.ActivityFinishRoute
 import com.fitx.app.ui.screens.ActivityStartRoute
 import com.fitx.app.ui.screens.DashboardRoute
 import com.fitx.app.ui.screens.HabitsRoute
@@ -57,8 +58,18 @@ fun FitxNavGraph(
         }
         composable(Screen.LiveTracking.route) {
             LiveTrackingRoute(
-                onStop = { navController.navigate(Screen.ActivityHistory.route) },
+                onStop = { navController.navigate(Screen.ActivityFinish.route) },
                 onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.ActivityFinish.route) {
+            ActivityFinishRoute(
+                onOpenHistory = { navController.navigate(Screen.ActivityHistory.route) },
+                onBackToStart = {
+                    navController.navigate(Screen.ActivityStart.route) {
+                        popUpTo(Screen.ActivityStart.route) { inclusive = false }
+                    }
+                }
             )
         }
         composable(Screen.ActivityHistory.route) {

@@ -60,6 +60,21 @@ fun SettingsRoute(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text("Haptic Feedback")
+                    Switch(
+                        checked = settings.hapticsEnabled,
+                        onCheckedChange = { viewModel.setHaptics(it) }
+                    )
+                }
+            }
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text("Notifications")
                     Switch(
                         checked = settings.notificationsEnabled,
@@ -94,7 +109,7 @@ fun SettingsRoute(
                     }
                 }
             }
-            Text("Reminder workers and theme settings are saved in DataStore.")
+            Text("Theme, notifications, and haptic preferences are saved in DataStore.")
         }
     }
 }

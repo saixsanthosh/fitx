@@ -61,14 +61,16 @@ Compare the result with the hash in `SHA256.txt`.
 ## Main modules
 
 - User Profile + HealthCalculator (BMI/BMR/TDEE/calorie target/goal projection)
-- Activity Tracking (walking/cycling, GPS + steps, foreground service, history)
+- Activity Tracking (walking/cycling, GPS path preview map, primary metric rotation, history + detail route map)
+- Activity Finish Summary (dynamic appreciation message, count-up primary stat, share-card PNG export)
 - Daily Weight Tracker (CRUD, weekly average, trend chart)
-- Workout Planner (templates, logs, history)
+- Workout Planner (templates, logs, history, personal records)
 - Routine Habits (daily streak tracking)
 - Date-Based Planner (tasks by date, daily repeats)
-- Nutrition Tracking (USDA FoodData Central + local meal logs)
+- Nutrition Tracking (USDA pagination, custom foods, saved serving presets, local meal logs)
 - Hybrid Online/Offline Sync (Room local-first + Firestore sync queue + WorkManager)
-- Dashboard + Settings + Reminder notifications (weight/water)
+- Dashboard + Settings + Reminder notifications (weight/water) + haptic toggle
+- Home widget (pending tasks, completion progress, quick complete for top tasks)
 - Google-only Firebase login
 
 ## Developer docs

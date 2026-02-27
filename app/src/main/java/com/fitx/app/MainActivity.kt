@@ -7,6 +7,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,12 +59,18 @@ class MainActivity : ComponentActivity() {
             }
 
             FitxTheme(darkTheme = settings.darkTheme) {
-                if (showSplash) {
-                    FitxSplash(onFinished = { showSplash = false })
-                } else if (authUser == null) {
-                    AuthRoute(viewModel = authViewModel)
-                } else {
-                    FitxNavGraph()
+                Crossfade(
+                    targetState = settings.darkTheme,
+                    animationSpec = tween(durationMillis = 220),
+                    label = "theme_crossfade"
+                ) {
+                    if (showSplash) {
+                        FitxSplash(onFinished = { showSplash = false })
+                    } else if (authUser == null) {
+                        AuthRoute(viewModel = authViewModel)
+                    } else {
+                        FitxNavGraph()
+                    }
                 }
 
                 if (updateInfo != null) {

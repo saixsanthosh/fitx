@@ -19,6 +19,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM exercise_log WHERE dateEpochDay = :dateEpochDay ORDER BY logId DESC")
     fun observeExerciseLogs(dateEpochDay: Long): Flow<List<ExerciseLogEntity>>
 
+    @Query("SELECT * FROM exercise_log ORDER BY logId DESC")
+    fun observeAllExerciseLogs(): Flow<List<ExerciseLogEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExerciseLog(entity: ExerciseLogEntity): Long
 }

@@ -7,5 +7,6 @@ interface SettingsRepository {
     fun observeSettings(): Flow<SettingsPreferences>
     suspend fun setDarkTheme(enabled: Boolean)
     suspend fun setNotifications(enabled: Boolean)
+    suspend fun setHaptics(enabled: Boolean)
 }
 

@@ -48,6 +48,7 @@ fun WorkoutRoute(
 ) {
     val templates by viewModel.templates.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
+    val personalRecords by viewModel.personalRecords.collectAsStateWithLifecycle()
 
     var templateName by remember { mutableStateOf("") }
     var templateDesc by remember { mutableStateOf("") }
@@ -93,6 +94,32 @@ fun WorkoutRoute(
                             WorkoutStat("Sets", totalSets.toString(), Modifier.weight(1f))
                             WorkoutStat("Reps", totalReps.toString(), Modifier.weight(1f))
                             WorkoutStat("Volume", "${totalVolume.roundToInt()} kg", Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            item { SectionTitle("Personal Records") }
+            if (personalRecords.isEmpty()) {
+                item { EmptyWorkoutCard("No records yet. Keep logging to unlock PRs.") }
+            }
+            items(personalRecords, key = { it.exerciseName }) { record ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(record.exerciseName, fontWeight = FontWeight.Bold)
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Max ${"%.1f".format(record.maxWeightKg)} kg", color = MaterialTheme.colorScheme.primary)
+                            Text("Volume ${record.maxVolume.roundToInt()}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

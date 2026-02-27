@@ -22,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -55,6 +56,7 @@ fun NutritionRoute(
     onBack: () -> Unit
 ) {
     val meals by viewModel.meals.collectAsStateWithLifecycle()
+    val customFoods by viewModel.customFoods.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val loadingMoreFoods by viewModel.loadingMoreFoods.collectAsStateWithLifecycle()
@@ -65,6 +67,13 @@ fun NutritionRoute(
     var query by remember { mutableStateOf("") }
     var gramsInput by remember { mutableStateOf("100") }
     var selectedMealType by remember { mutableStateOf("Breakfast") }
+    var customName by remember { mutableStateOf("") }
+    var customCalories by remember { mutableStateOf("0") }
+    var customProtein by remember { mutableStateOf("0") }
+    var customCarbs by remember { mutableStateOf("0") }
+    var customFat by remember { mutableStateOf("0") }
+    var servingLabel by remember { mutableStateOf("1 serving") }
+    var servingGrams by remember { mutableStateOf("100") }
     val quickQueries = remember {
         listOf("All", "egg", "chicken", "rice", "oats", "banana", "paneer", "tofu", "milk")
     }
@@ -113,7 +122,7 @@ fun NutritionRoute(
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("Mediterranean Diet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(
-                                "${totalCalories.roundToInt()} eaten  •  ${leftCalories.roundToInt()} left",
+                                "${totalCalories.roundToInt()} eaten  |  ${leftCalories.roundToInt()} left",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
@@ -212,6 +221,158 @@ fun NutritionRoute(
                             },
                             label = { Text(quick) }
                         )
+                    }
+                }
+            }
+
+            item {
+                Text("Custom Foods", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = customName,
+                            onValueChange = { customName = it },
+                            label = { Text("Food name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = customCalories,
+                                onValueChange = { customCalories = it.filter { c -> c.isDigit() || c == '.' } },
+                                label = { Text("Kcal /100g") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = customProtein,
+                                onValueChange = { customProtein = it.filter { c -> c.isDigit() || c == '.' } },
+                                label = { Text("P /100g") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = customCarbs,
+                                onValueChange = { customCarbs = it.filter { c -> c.isDigit() || c == '.' } },
+                                label = { Text("C /100g") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = customFat,
+                                onValueChange = { customFat = it.filter { c -> c.isDigit() || c == '.' } },
+                                label = { Text("F /100g") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = servingLabel,
+                                onValueChange = { servingLabel = it },
+                                label = { Text("Serving label") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = servingGrams,
+                                onValueChange = { servingGrams = it.filter { c -> c.isDigit() || c == '.' } },
+                                label = { Text("Serving grams") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                viewModel.saveCustomFood(
+                                    name = customName,
+                                    caloriesPer100g = customCalories.toDoubleOrNull() ?: 0.0,
+                                    proteinPer100g = customProtein.toDoubleOrNull() ?: 0.0,
+                                    carbsPer100g = customCarbs.toDoubleOrNull() ?: 0.0,
+                                    fatPer100g = customFat.toDoubleOrNull() ?: 0.0,
+                                    servingLabel = servingLabel,
+                                    servingGrams = servingGrams.toDoubleOrNull()
+                                )
+                                customName = ""
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Save Custom Food")
+                        }
+                    }
+                }
+            }
+            if (customFoods.isNotEmpty()) {
+                item {
+                    Text("Saved Custom Foods", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            items(customFoods, key = { it.id }) { food ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(food.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            "Per 100g  |  ${food.caloriesPer100g.roundToInt()} kcal  |  P ${food.proteinPer100g.roundToInt()} C ${food.carbsPer100g.roundToInt()} F ${food.fatPer100g.roundToInt()}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    val grams = gramsInput.toDoubleOrNull() ?: 100.0
+                                    viewModel.addCustomFood(food, selectedMealType, grams)
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Add ${gramsInput.ifBlank { "100" }}g")
+                            }
+                            FilledTonalButton(
+                                onClick = {
+                                    val grams = gramsInput.toDoubleOrNull() ?: 100.0
+                                    viewModel.saveServingPreset(food.id, "${grams.roundToInt()}g", grams)
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Save Serving")
+                            }
+                        }
+                        if (food.servings.isNotEmpty()) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(food.servings) { serving ->
+                                    AssistChip(
+                                        onClick = { viewModel.addCustomFoodServing(food, selectedMealType, serving) },
+                                        label = { Text("${serving.label} (${serving.grams.roundToInt()}g)") }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -416,7 +577,7 @@ private fun MealRow(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(meal.foodName, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 Text(
-                    "${meal.mealType}  •  ${meal.grams.roundToInt()}g  •  ${meal.calories.roundToInt()} kcal  •  P ${meal.protein.roundToInt()} C ${meal.carbs.roundToInt()} F ${meal.fat.roundToInt()}",
+                    "${meal.mealType}  |  ${meal.grams.roundToInt()}g  |  ${"%.1f".format(meal.calories)} kcal  |  P ${"%.1f".format(meal.protein)} C ${"%.1f".format(meal.carbs)} F ${"%.1f".format(meal.fat)}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall
                 )

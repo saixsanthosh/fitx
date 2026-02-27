@@ -1,7 +1,9 @@
 package com.fitx.app.domain.repository
 
+import com.fitx.app.domain.model.CustomFood
 import com.fitx.app.domain.model.FoodItem
 import com.fitx.app.domain.model.MealEntry
+import com.fitx.app.domain.model.ServingPreset
 import kotlinx.coroutines.flow.Flow
 
 interface NutritionRepository {
@@ -11,4 +13,7 @@ interface NutritionRepository {
     fun observeMeals(dateEpochDay: Long): Flow<List<MealEntry>>
     suspend fun addMeal(mealEntry: MealEntry)
     suspend fun deleteMeal(mealEntryId: Long)
+    fun observeCustomFoods(): Flow<List<CustomFood>>
+    suspend fun saveCustomFood(customFood: CustomFood)
+    suspend fun saveServingPreset(foodId: String, preset: ServingPreset)
 }
