@@ -3,6 +3,9 @@ package com.fitx.app.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -26,12 +29,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryAdd
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,9 +47,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fitx.app.ui.viewmodel.MusicTrack
@@ -63,10 +73,12 @@ import com.fitx.app.ui.viewmodel.YouTubePlaylistSummary
 @Composable
 fun MusicRoute(
     viewModel: MusicViewModel = hiltViewModel(),
-    onOpenNowPlaying: () -> Unit
+    onOpenNowPlaying: () -> Unit,
+    onOpenYouTubePlaylist: (String) -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showSourceTools by remember { mutableStateOf(false) }
     val localSongPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -149,6 +161,27 @@ fun MusicRoute(
                     FeaturedPlaylistCard()
                 }
                 item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Top Daily Playlists",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        OutlinedButton(onClick = { showSourceTools = !showSourceTools }) {
+                            Icon(
+                                imageVector = if (showSourceTools) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null
+                            )
+                            Text(if (showSourceTools) " Hide Tools" else " Sources")
+                        }
+                    }
+                }
+                if (showSourceTools) item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1321)),
@@ -192,7 +225,7 @@ fun MusicRoute(
                         }
                     }
                 }
-                item {
+                if (showSourceTools) item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1321)),
@@ -217,7 +250,7 @@ fun MusicRoute(
                                     Text("Import to Library")
                                 }
                                 Text(
-                                    "Uses your free YouTube API key",
+                                    "Uses your free YouTube API key. Play opens in-app embed.",
                                     color = Color(0xFF8EA0C6),
                                     style = MaterialTheme.typography.labelSmall
                                 )
@@ -232,31 +265,15 @@ fun MusicRoute(
                         }
                     }
                 }
-                if (state.youtubeLibrary.isNotEmpty()) {
+                if (showSourceTools && state.youtubeLibrary.isNotEmpty()) {
                     item {
                         Text("YouTube Library", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                     items(state.youtubeLibrary, key = { it.id }) { playlist ->
                         YouTubePlaylistRow(
                             playlist = playlist,
-                            onOpen = {
-                                val url = "https://www.youtube.com/playlist?list=${playlist.id}"
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            }
+                            onOpen = { onOpenYouTubePlaylist(playlist.id) }
                         )
-                    }
-                }
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Top Daily Playlists", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("See all", color = Color(0xFF94A3C5), style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 items(state.filteredTracks, key = { it.id }) { track ->
@@ -271,7 +288,7 @@ fun MusicRoute(
                     )
                 }
                 item {
-                    Box(modifier = Modifier.height(84.dp))
+                    Box(modifier = Modifier.height(176.dp))
                 }
             }
 
@@ -284,7 +301,7 @@ fun MusicRoute(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                        .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 92.dp)
                 )
             }
         }
@@ -326,7 +343,7 @@ private fun YouTubePlaylistRow(
                 )
             }
             IconButton(onClick = onOpen) {
-                Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color.White)
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
             }
         }
     }
@@ -348,8 +365,8 @@ fun MusicNowPlayingRoute(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            Color(0xFF3A2E4E),
-                            Color(0xFF0B0F1C)
+                            Color(0xFF151125),
+                            Color(0xFF090D18)
                         )
                     )
                 )
@@ -394,7 +411,7 @@ fun MusicNowPlayingRoute(
                         .clip(RoundedCornerShape(28.dp))
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color(0xFF221C32), Color(0xFF14182C))
+                                listOf(Color(0xFF1C1930), Color(0xFF111729))
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -405,7 +422,7 @@ fun MusicNowPlayingRoute(
                             .clip(CircleShape)
                             .background(
                                 Brush.radialGradient(
-                                    colors = listOf(Color(0xFFCB95FF), Color(0xFF5947AA))
+                                    colors = listOf(Color(0xFFD08EFF), Color(0xFF7051C8))
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -433,7 +450,12 @@ fun MusicNowPlayingRoute(
                     value = progress,
                     onValueChange = { viewModel.seekTo(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    valueRange = 0f..1f
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFFD28CFF),
+                        activeTrackColor = Color(0xFFD28CFF),
+                        inactiveTrackColor = Color(0xFF3B3554)
+                    )
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -469,6 +491,76 @@ fun MusicNowPlayingRoute(
                         Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun MusicYouTubeRoute(
+    playlistId: String,
+    onBack: () -> Unit
+) {
+    val decodedPlaylistId = remember(playlistId) { Uri.decode(playlistId) }
+    val embedUrl = remember(decodedPlaylistId) {
+        "https://www.youtube.com/embed/videoseries?list=${Uri.encode(decodedPlaylistId)}"
+    }
+    val context = LocalContext.current
+    val webView = remember {
+        WebView(context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = true
+            webChromeClient = WebChromeClient()
+            webViewClient = WebViewClient()
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        }
+    }
+    DisposableEffect(webView) {
+        onDispose { webView.destroy() }
+    }
+
+    FitxScreenScaffold {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(it)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                }
+                Text("YouTube Playlist", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Box(modifier = Modifier.size(40.dp))
+            }
+            Text(
+                "Official YouTube embed in-app. Playback availability and ads are controlled by YouTube.",
+                color = Color(0xFF9FB0D4),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1424)),
+                border = BorderStroke(1.dp, Color(0xFF2C3D63))
+            ) {
+                AndroidView(
+                    factory = { webView },
+                    modifier = Modifier.fillMaxSize(),
+                    update = { current ->
+                        if (current.url != embedUrl) {
+                            current.loadUrl(embedUrl)
+                        }
+                    }
+                )
             }
         }
     }

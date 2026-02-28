@@ -1,5 +1,7 @@
 package com.fitx.app.ui.navigation
 
+import android.net.Uri
+
 sealed class Screen(val route: String) {
     data object Dashboard : Screen("dashboard")
     data object Profile : Screen("profile")
@@ -9,6 +11,9 @@ sealed class Screen(val route: String) {
     data object ActivityHistory : Screen("activity_history")
     data object Music : Screen("music")
     data object MusicNowPlaying : Screen("music_now_playing")
+    data object MusicYouTube : Screen("music_youtube/{playlistId}") {
+        fun createRoute(playlistId: String): String = "music_youtube/${Uri.encode(playlistId)}"
+    }
     data object SessionDetail : Screen("session_detail/{sessionId}") {
         fun createRoute(sessionId: Long): String = "session_detail/$sessionId"
     }

@@ -60,6 +60,7 @@ import com.fitx.app.ui.screens.HealthCheckRoute
 import com.fitx.app.ui.screens.LiveTrackingRoute
 import com.fitx.app.ui.screens.MusicNowPlayingRoute
 import com.fitx.app.ui.screens.MusicRoute
+import com.fitx.app.ui.screens.MusicYouTubeRoute
 import com.fitx.app.ui.screens.NutritionRoute
 import com.fitx.app.ui.screens.PlannerRoute
 import com.fitx.app.ui.screens.ProfileRoute
@@ -95,13 +96,14 @@ fun FitxNavGraph(
     val bottomRoutes = remember(bottomItems) { bottomItems.map { it.route }.toSet() }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val hideFabRoutes = remember { setOf(Screen.Music.route) }
     var showQuickAddSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            if (currentRoute in bottomRoutes) {
+            if (currentRoute in bottomRoutes && currentRoute !in hideFabRoutes) {
                 FloatingActionButton(
                     onClick = { showQuickAddSheet = true },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -222,11 +224,24 @@ fun FitxNavGraph(
             }
             composable(Screen.Music.route) {
                 MusicRoute(
-                    onOpenNowPlaying = { navController.navigate(Screen.MusicNowPlaying.route) }
+                    onOpenNowPlaying = { navController.navigate(Screen.MusicNowPlaying.route) },
+                    onOpenYouTubePlaylist = { playlistId ->
+                        navController.navigate(Screen.MusicYouTube.createRoute(playlistId))
+                    }
                 )
             }
             composable(Screen.MusicNowPlaying.route) {
                 MusicNowPlayingRoute(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = Screen.MusicYouTube.route,
+                arguments = listOf(navArgument("playlistId") { type = NavType.StringType })
+            ) { backStackEntryForYouTube ->
+                val playlistId = backStackEntryForYouTube.arguments?.getString("playlistId").orEmpty()
+                MusicYouTubeRoute(
+                    playlistId = playlistId,
                     onBack = { navController.popBackStack() }
                 )
             }
