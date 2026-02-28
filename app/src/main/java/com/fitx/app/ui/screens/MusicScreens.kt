@@ -8,12 +8,14 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -57,9 +59,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -68,6 +71,7 @@ import com.fitx.app.ui.components.music.MetrolistBigSeekBar
 import com.fitx.app.ui.viewmodel.MusicTrack
 import com.fitx.app.ui.viewmodel.MusicViewModel
 import com.fitx.app.ui.viewmodel.YouTubePlaylistSummary
+import coil.compose.SubcomposeAsyncImage
 
 @Composable
 fun MusicRoute(
@@ -77,6 +81,7 @@ fun MusicRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme
     var showSourceTools by remember { mutableStateOf(false) }
     val localSongPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -98,19 +103,12 @@ fun MusicRoute(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(it)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0xFF0A0D1B),
-                            Color(0xFF080A14)
-                        )
-                    )
-                )
+                .background(colors.background)
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 14.dp),
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
@@ -121,13 +119,36 @@ fun MusicRoute(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text("Good Morning", color = Color(0xFF9AA6C3), style = MaterialTheme.typography.labelMedium)
-                            Text("Fitx Music", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "Good Morning",
+                                color = colors.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "Fitx Music",
+                                color = colors.onBackground,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                        Row {
-                            IconButton(onClick = {}) { Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Color(0xFFC6CBE0)) }
-                            IconButton(onClick = {}) { Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = Color(0xFFC6CBE0)) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.surfaceVariant.copy(alpha = 0.75f))
+                            ) {
+                                Icon(Icons.Outlined.Notifications, contentDescription = null, tint = colors.onSurfaceVariant)
+                            }
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.surfaceVariant.copy(alpha = 0.75f))
+                            ) {
+                                Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = colors.onSurfaceVariant)
+                            }
                         }
                     }
                 }
@@ -135,7 +156,7 @@ fun MusicRoute(
                     Text(
                         "SoundGroove your sessions,\nanytime",
                         style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
+                        color = colors.onBackground,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
@@ -147,132 +168,70 @@ fun MusicRoute(
                                 onClick = { viewModel.selectCategory(category) },
                                 label = { Text(category) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFFC49BFF),
-                                    selectedLabelColor = Color(0xFF141020),
-                                    containerColor = Color(0xFF161B2B),
-                                    labelColor = Color(0xFFBFC8DE)
+                                    selectedContainerColor = colors.primary.copy(alpha = 0.24f),
+                                    selectedLabelColor = colors.primary,
+                                    containerColor = colors.surfaceVariant.copy(alpha = 0.88f),
+                                    labelColor = colors.onSurfaceVariant
                                 )
                             )
                         }
                     }
                 }
                 item {
-                    FeaturedPlaylistCard()
+                    DiscoveryPlaylistCard(
+                        onPlay = {
+                            state.filteredTracks.firstOrNull()?.let { track ->
+                                viewModel.playTrack(track)
+                                onOpenNowPlaying()
+                            }
+                        },
+                        onToggleSources = { showSourceTools = !showSourceTools },
+                        sourcesExpanded = showSourceTools
+                    )
                 }
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Top Daily Playlists",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                    AnimatedVisibility(visible = showSourceTools) {
+                        MusicSourceToolsPanel(
+                            catalogQuery = state.catalogQuery,
+                            onCatalogQueryChanged = viewModel::onCatalogQueryChanged,
+                            onSearchCatalog = viewModel::searchFreeCatalog,
+                            catalogStatus = state.catalogStatus,
+                            catalogLoading = state.catalogLoading,
+                            youtubeInput = state.youtubeInput,
+                            onYouTubeInputChanged = viewModel::onYouTubeInputChanged,
+                            onImportYouTube = viewModel::importYouTubePlaylist,
+                            youtubeStatus = state.youtubeStatus,
+                            onAddLocal = { localSongPicker.launch(arrayOf("audio/*")) }
                         )
-                        OutlinedButton(onClick = { showSourceTools = !showSourceTools }) {
-                            Icon(
-                                imageVector = if (showSourceTools) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null
-                            )
-                            Text(if (showSourceTools) " Hide Tools" else " Sources")
-                        }
                     }
                 }
-                if (showSourceTools) item {
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1321)),
-                        border = BorderStroke(1.dp, Color(0xFF2B395C))
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text("Ad-free sources", color = Color.White, fontWeight = FontWeight.SemiBold)
-                            OutlinedButton(onClick = { localSongPicker.launch(arrayOf("audio/*")) }) {
-                                Icon(Icons.Default.LibraryAdd, contentDescription = null)
-                                Text(" Add Local Song")
-                            }
-                            OutlinedTextField(
-                                value = state.catalogQuery,
-                                onValueChange = { viewModel.onCatalogQueryChanged(it) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                label = { Text("Search free licensed catalog") }
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { viewModel.searchFreeCatalog() }) {
-                                    Text(if (state.catalogLoading) "Searching..." else "Find Free Tracks")
-                                }
-                                Text(
-                                    "Public-domain and Creative Commons audio",
-                                    color = Color(0xFF8EA0C6),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                            if (!state.catalogStatus.isNullOrBlank()) {
-                                Text(
-                                    state.catalogStatus.orEmpty(),
-                                    color = Color(0xFFC0D0F5),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
-                if (showSourceTools) item {
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1321)),
-                        border = BorderStroke(1.dp, Color(0xFF2B395C))
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text("Import YouTube Playlist", color = Color.White, fontWeight = FontWeight.SemiBold)
-                            OutlinedTextField(
-                                value = state.youtubeInput,
-                                onValueChange = { viewModel.onYouTubeInputChanged(it) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                label = { Text("Playlist link or ID") }
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { viewModel.importYouTubePlaylist() }) {
-                                    Text("Import to Library")
-                                }
-                                Text(
-                                    "Uses your free YouTube API key. Play opens in-app embed.",
-                                    color = Color(0xFF8EA0C6),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                            if (!state.youtubeStatus.isNullOrBlank()) {
-                                Text(
-                                    state.youtubeStatus.orEmpty(),
-                                    color = Color(0xFFC0D0F5),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
-                if (showSourceTools && state.youtubeLibrary.isNotEmpty()) {
+                if (state.youtubeLibrary.isNotEmpty()) {
                     item {
-                        Text("YouTube Library", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        SectionTitle("YouTube Library")
                     }
                     items(state.youtubeLibrary, key = { it.id }) { playlist ->
                         YouTubePlaylistRow(
                             playlist = playlist,
                             onOpen = { onOpenYouTubePlaylist(playlist.id) }
                         )
+                    }
+                }
+                item {
+                    SectionTitle("My Music")
+                }
+                if (state.filteredTracks.isEmpty()) {
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f)),
+                            border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                "No tracks in this category yet. Open Sources to import local, archive, or YouTube playlists.",
+                                modifier = Modifier.padding(14.dp),
+                                color = colors.onSurfaceVariant
+                            )
+                        }
                     }
                 }
                 items(state.filteredTracks, key = { it.id }) { track ->
@@ -287,7 +246,7 @@ fun MusicRoute(
                     )
                 }
                 item {
-                    Box(modifier = Modifier.height(176.dp))
+                    Spacer(modifier = Modifier.height(176.dp))
                 }
             }
 
@@ -308,14 +267,161 @@ fun MusicRoute(
 }
 
 @Composable
+private fun SectionTitle(title: String) {
+    Text(
+        text = title,
+        color = MaterialTheme.colorScheme.onBackground,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun DiscoveryPlaylistCard(
+    onPlay: () -> Unit,
+    onToggleSources: () -> Unit,
+    sourcesExpanded: Boolean
+) {
+    val colors = MaterialTheme.colorScheme
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.94f)),
+        border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.34f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "Discover Weekly",
+                color = colors.onSurface,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "Curated tracks for workout, focus, and recovery sessions.",
+                color = colors.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onPlay,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f))
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Text(" Play")
+                }
+                OutlinedButton(
+                    onClick = onToggleSources,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.45f))
+                ) {
+                    Icon(
+                        imageVector = if (sourcesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null
+                    )
+                    Text(if (sourcesExpanded) "Hide Sources" else "Sources")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicSourceToolsPanel(
+    catalogQuery: String,
+    onCatalogQueryChanged: (String) -> Unit,
+    onSearchCatalog: () -> Unit,
+    catalogStatus: String?,
+    catalogLoading: Boolean,
+    youtubeInput: String,
+    onYouTubeInputChanged: (String) -> Unit,
+    onImportYouTube: () -> Unit,
+    youtubeStatus: String?,
+    onAddLocal: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f)),
+        border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Ad-free sources", color = colors.onSurface, fontWeight = FontWeight.SemiBold)
+            OutlinedButton(
+                onClick = onAddLocal,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f))
+            ) {
+                Icon(Icons.Default.LibraryAdd, contentDescription = null)
+                Text(" Add Local Song")
+            }
+            OutlinedTextField(
+                value = catalogQuery,
+                onValueChange = onCatalogQueryChanged,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Search free licensed catalog") }
+            )
+            OutlinedButton(
+                onClick = onSearchCatalog,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f))
+            ) {
+                Text(if (catalogLoading) "Searching..." else "Find Free Tracks")
+            }
+            if (!catalogStatus.isNullOrBlank()) {
+                Text(
+                    catalogStatus,
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Text("Import YouTube Playlist", color = colors.onSurface, fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(
+                value = youtubeInput,
+                onValueChange = onYouTubeInputChanged,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Playlist link or ID") }
+            )
+            OutlinedButton(
+                onClick = onImportYouTube,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f))
+            ) {
+                Text("Import to Library")
+            }
+            if (!youtubeStatus.isNullOrBlank()) {
+                Text(
+                    youtubeStatus,
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun YouTubePlaylistRow(
     playlist: YouTubePlaylistSummary,
     onOpen: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101627)),
-        border = BorderStroke(1.dp, Color(0xFF384C75))
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f)),
+        border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.34f))
     ) {
         Row(
             modifier = Modifier
@@ -324,25 +430,63 @@ private fun YouTubePlaylistRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFCD5353)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("YT", color = Color.White, fontWeight = FontWeight.Bold)
+            if (!playlist.thumbnailUrl.isNullOrBlank()) {
+                SubcomposeAsyncImage(
+                    model = playlist.thumbnailUrl,
+                    contentDescription = playlist.title,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surface),
+                    contentScale = ContentScale.Crop,
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(colors.primary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("YT", color = colors.primary, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(colors.primary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("YT", color = colors.primary, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.primary.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("YT", color = colors.primary, fontWeight = FontWeight.Bold)
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(playlist.title, color = Color.White, maxLines = 1, fontWeight = FontWeight.SemiBold)
+                Text(
+                    playlist.title,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Text(
                     "${playlist.channelTitle} - ${playlist.itemCount} videos",
-                    color = Color(0xFFA4B4D8),
+                    color = colors.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
             IconButton(onClick = onOpen) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = colors.primary)
             }
         }
     }
@@ -355,6 +499,7 @@ fun MusicNowPlayingRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val current = state.currentTrack
+    val colors = MaterialTheme.colorScheme
 
     FitxScreenScaffold {
         Box(
@@ -364,8 +509,8 @@ fun MusicNowPlayingRoute(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            Color(0xFF151125),
-                            Color(0xFF090D18)
+                            colors.background.copy(alpha = 0.96f),
+                            colors.surface.copy(alpha = 0.86f)
                         )
                     )
                 )
@@ -374,11 +519,11 @@ fun MusicNowPlayingRoute(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                    .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text("No track selected", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                    Text("No track selected", color = colors.onBackground, style = MaterialTheme.typography.titleLarge)
                 }
                 return@Box
             }
@@ -394,12 +539,22 @@ fun MusicNowPlayingRoute(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.surfaceVariant.copy(alpha = 0.7f))
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = colors.onSurface)
                     }
-                    Text("Now Playing", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Tune, contentDescription = null, tint = Color.White)
+                    Text("Now Playing", color = colors.onBackground, style = MaterialTheme.typography.titleMedium)
+                    IconButton(
+                        onClick = {},
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.surfaceVariant.copy(alpha = 0.7f))
+                    ) {
+                        Icon(Icons.Default.Tune, contentDescription = null, tint = colors.onSurface)
                     }
                 }
 
@@ -410,7 +565,10 @@ fun MusicNowPlayingRoute(
                         .clip(RoundedCornerShape(28.dp))
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color(0xFF1C1930), Color(0xFF111729))
+                                listOf(
+                                    colors.surfaceVariant.copy(alpha = 0.9f),
+                                    colors.surface.copy(alpha = 0.86f)
+                                )
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -419,19 +577,23 @@ fun MusicNowPlayingRoute(
                         modifier = Modifier
                             .size(210.dp)
                             .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(Color(0xFFD08EFF), Color(0xFF7051C8))
-                                )
-                            ),
+                            .background(colors.primary.copy(alpha = 0.18f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.GraphicEq,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(78.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(170.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary.copy(alpha = 0.26f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = colors.primary,
+                                modifier = Modifier.size(78.dp)
+                            )
+                        }
                     }
                 }
 
@@ -439,8 +601,8 @@ fun MusicNowPlayingRoute(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(current.title, color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text(current.artist, color = Color(0xFFD0D6EE), style = MaterialTheme.typography.bodyMedium)
+                    Text(current.title, color = colors.onBackground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(current.artist, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                 }
 
                 val durationMs = state.durationMs.takeIf { it > 0 } ?: 1L
@@ -449,15 +611,15 @@ fun MusicNowPlayingRoute(
                     progressProvider = { progress },
                     onProgressChange = { viewModel.seekTo(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    background = Color(0xFF3B3554),
-                    color = Color(0xFFD28CFF)
+                    background = colors.outline.copy(alpha = 0.36f),
+                    color = colors.primary
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(formatTime(state.positionMs), color = Color(0xFFAEB9D7), style = MaterialTheme.typography.labelMedium)
-                    Text(formatTime(state.durationMs), color = Color(0xFFAEB9D7), style = MaterialTheme.typography.labelMedium)
+                    Text(formatTime(state.positionMs), color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                    Text(formatTime(state.durationMs), color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
                 }
 
                 Row(
@@ -466,24 +628,24 @@ fun MusicNowPlayingRoute(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { viewModel.skipPrevious() }) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+                        Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = colors.onBackground, modifier = Modifier.size(34.dp))
                     }
                     Card(
                         onClick = { viewModel.togglePlayback() },
                         shape = CircleShape,
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFC49BFF))
+                        colors = CardDefaults.cardColors(containerColor = colors.primary)
                     ) {
                         Icon(
                             imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = null,
-                            tint = Color(0xFF1A1226),
+                            tint = colors.onPrimary,
                             modifier = Modifier
                                 .padding(12.dp)
                                 .size(34.dp)
                         )
                     }
                     IconButton(onClick = { viewModel.skipNext() }) {
-                        Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+                        Icon(Icons.Default.SkipNext, contentDescription = null, tint = colors.onBackground, modifier = Modifier.size(34.dp))
                     }
                 }
             }
@@ -501,6 +663,7 @@ fun MusicYouTubeRoute(
         "https://www.youtube.com/embed/videoseries?list=${Uri.encode(decodedPlaylistId)}"
     }
     val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme
     val webView = remember {
         WebView(context).apply {
             settings.javaScriptEnabled = true
@@ -528,15 +691,25 @@ fun MusicYouTubeRoute(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surfaceVariant.copy(alpha = 0.7f))
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = colors.onSurface)
                 }
-                Text("YouTube Playlist", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "YouTube Playlist",
+                    color = colors.onBackground,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Box(modifier = Modifier.size(40.dp))
             }
             Text(
-                "Official YouTube embed in-app. Playback availability and ads are controlled by YouTube.",
-                color = Color(0xFF9FB0D4),
+                "Official YouTube embed. Availability, ads, and restrictions are controlled by YouTube.",
+                color = colors.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall
             )
             Card(
@@ -544,8 +717,8 @@ fun MusicYouTubeRoute(
                     .fillMaxWidth()
                     .weight(1f),
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1424)),
-                border = BorderStroke(1.dp, Color(0xFF2C3D63))
+                colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.92f)),
+                border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.34f))
             ) {
                 AndroidView(
                     factory = { webView },
@@ -562,44 +735,18 @@ fun MusicYouTubeRoute(
 }
 
 @Composable
-private fun FeaturedPlaylistCard() {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFCAA0FF))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text("Discover Weekly", color = Color(0xFF1F1430), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(
-                "Curated tracks for workouts, focus, and recovery sessions.",
-                color = Color(0xFF3B2A55),
-                style = MaterialTheme.typography.bodySmall
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFF2B1A44))
-                Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = Color(0xFF2B1A44))
-                Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFF2B1A44))
-            }
-        }
-    }
-}
-
-@Composable
 private fun MusicRow(
     track: MusicTrack,
     isCurrent: Boolean,
     isPlaying: Boolean,
     onPlayClick: () -> Unit
 ) {
-    val accent = if (isCurrent) Color(0xFFC49BFF) else Color(0xFF3A86FF)
+    val colors = MaterialTheme.colorScheme
+    val accent = if (isCurrent) colors.primary else colors.outline
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF101627)),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.32f))
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.9f)),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.38f))
     ) {
         Row(
             modifier = Modifier
@@ -612,24 +759,46 @@ private fun MusicRow(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(accent.copy(alpha = 0.25f)),
+                    .background(colors.primary.copy(alpha = if (isCurrent) 0.28f else 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(track.title.take(1), color = Color.White, fontWeight = FontWeight.Bold)
+                Text(track.title.take(1), color = colors.onSurface, fontWeight = FontWeight.Bold)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(track.title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${track.artist} - ${track.durationLabel} - ${track.source}",
-                    color = Color(0xFF9FAED0),
-                    style = MaterialTheme.typography.bodySmall
+                    track.title,
+                    color = colors.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "${track.artist} | ${track.durationLabel}",
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.primary.copy(alpha = 0.14f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = track.source,
+                    color = colors.primary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
             IconButton(onClick = onPlayClick) {
                 Icon(
                     imageVector = if (isCurrent && isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = null,
-                    tint = Color.White
+                    tint = if (isCurrent) colors.primary else colors.onSurface
                 )
             }
         }
@@ -644,38 +813,51 @@ private fun MiniPlayerCard(
     onOpenNowPlaying: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = MaterialTheme.colorScheme
     Card(
         onClick = onOpenNowPlaying,
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xEE171C2A)),
-        border = BorderStroke(1.dp, Color(0xFF2E3B5F))
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceVariant.copy(alpha = 0.98f)),
+        border = BorderStroke(1.dp, colors.outline.copy(alpha = 0.34f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(44.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF344575)),
+                    .background(colors.primary.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = Color.White)
+                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = colors.primary)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(track.title, color = Color.White, maxLines = 1)
-                Text(track.artist, color = Color(0xFFA6B5D8), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                Text(
+                    track.title,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    track.artist,
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
             IconButton(onClick = onPlayPause) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = null,
-                    tint = Color(0xFFDAB7FF)
+                    tint = colors.primary
                 )
             }
         }
