@@ -3,8 +3,19 @@ package com.fitx.app.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +31,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WaterDrop
@@ -30,7 +43,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -48,7 +60,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,18 +74,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fitx.app.domain.model.FoodItem
 import com.fitx.app.domain.model.MealEntry
 import com.fitx.app.ui.viewmodel.NutritionViewModel
+import com.fitx.app.util.DateUtils
+import com.fitx.app.util.FoodImageResolver
 import kotlin.math.roundToInt
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.google.zxing.client.android.Intents
 import com.google.zxing.integration.android.IntentIntegrator
+import coil.compose.SubcomposeAsyncImage
 
 @Composable
 fun NutritionRoute(
     viewModel: NutritionViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
+    val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val meals by viewModel.meals.collectAsStateWithLifecycle()
     val customFoods by viewModel.customFoods.collectAsStateWithLifecycle()
     val favoriteFoods by viewModel.favoriteFoods.collectAsStateWithLifecycle()
@@ -105,6 +123,7 @@ fun NutritionRoute(
         listOf("All", "egg", "chicken", "rice", "oats", "banana", "paneer", "tofu", "milk")
     }
     val mealTypes = remember { listOf("Breakfast", "Lunch", "Snack", "Dinner") }
+    var expandedMealSections by remember { mutableStateOf(mealTypes.toSet()) }
     val barcodeScanLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -122,6 +141,14 @@ fun NutritionRoute(
     val dailyTarget = 2200.0
     val leftCalories = (dailyTarget - totalCalories).coerceAtLeast(0.0)
     val progress = (totalCalories / dailyTarget).toFloat().coerceIn(0f, 1f)
+    val proteinGoal = (dailyTarget * 0.30 / 4.0)
+    val carbsGoal = (dailyTarget * 0.40 / 4.0)
+    val fatGoal = (dailyTarget * 0.30 / 9.0)
+    val groupedMeals = remember(meals, mealTypes) {
+        mealTypes.associateWith { type ->
+            meals.filter { it.mealType.equals(type, ignoreCase = true) }
+        }
+    }
 
     FitxScreenScaffold(topBar = { ScreenTopBar("My Diary", onBack) }) { padding ->
         LazyColumn(
@@ -131,85 +158,95 @@ fun NutritionRoute(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Mediterranean Diet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(
-                                "${totalCalories.roundToInt()} eaten  |  ${leftCalories.roundToInt()} left",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "USDA online catalog (fallback offline: $offlineCount)",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(
-                                progress = { progress },
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                            )
-                            Text("${(progress * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
+                NutritionCommandHeader(
+                    dateLabel = DateUtils.formatEpochDay(selectedDate),
+                    totalCalories = totalCalories,
+                    leftCalories = leftCalories,
+                    progress = progress,
+                    offlineCount = offlineCount
+                )
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MacroProgressTile(
+                        title = "Protein",
+                        value = totalProtein,
+                        goal = proteinGoal,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MacroProgressTile(
+                        title = "Carbs",
+                        value = totalCarbs,
+                        goal = carbsGoal,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MacroProgressTile(
+                        title = "Fat",
+                        value = totalFat,
+                        goal = fatGoal,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MacroTile(
-                        title = "Protein",
-                        value = "${totalProtein.roundToInt()} g",
-                        modifier = Modifier.weight(1f)
-                    )
-                    MacroTile(
-                        title = "Carbs",
-                        value = "${totalCarbs.roundToInt()} g",
-                        modifier = Modifier.weight(1f)
-                    )
-                    MacroTile(
-                        title = "Fat",
-                        value = "${totalFat.roundToInt()} g",
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(mealTypes) { type ->
-                        FilterChip(
+                    mealTypes.take(2).forEach { type ->
+                        MealSlotCard(
+                            title = type,
                             selected = selectedMealType == type,
+                            mealCount = groupedMeals[type].orEmpty().size,
+                            calories = groupedMeals[type].orEmpty().sumOf { it.calories }.roundToInt(),
                             onClick = { selectedMealType = type },
-                            label = { Text(type) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-                                selectedLabelColor = MaterialTheme.colorScheme.primary,
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
-                            )
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
             item {
-                FilledTonalButton(
-                    onClick = { viewModel.copyYesterdayMeals() },
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    mealTypes.drop(2).forEach { type ->
+                        MealSlotCard(
+                            title = type,
+                            selected = selectedMealType == type,
+                            mealCount = groupedMeals[type].orEmpty().size,
+                            calories = groupedMeals[type].orEmpty().sumOf { it.calories }.roundToInt(),
+                            onClick = { selectedMealType = type },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+            item {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Copy Yesterday Meals")
+                    LazyRow(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(mealTypes) { type ->
+                            FilterChip(
+                                selected = selectedMealType == type,
+                                onClick = { selectedMealType = type },
+                                label = { Text(type) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                                    selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
+                                )
+                            )
+                        }
+                    }
+                    FilledTonalButton(
+                        onClick = { viewModel.copyYesterdayMeals() },
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Copy")
+                    }
                 }
             }
 
@@ -575,9 +612,13 @@ fun NutritionRoute(
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            FoodThumb(
+                                foodName = food.name,
+                                modifier = Modifier.size(48.dp)
+                            )
                             Text(food.name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             IconButton(onClick = { viewModel.toggleFavoriteFood(food) }) {
                                 Icon(
@@ -632,20 +673,21 @@ fun NutritionRoute(
             if (meals.isEmpty()) {
                 item { EmptyCard("No meals added yet. Search and tap Add.") }
             }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val groups = meals.groupBy { it.mealType }
-                    items(groups.keys.toList()) { mealType ->
-                        val group = groups[mealType].orEmpty()
-                        val kcal = group.sumOf { it.calories }.roundToInt()
-                        MealTypeSummaryCard(mealType = mealType, mealCount = group.size, calories = kcal)
-                    }
-                }
-            }
-            items(meals, key = { it.mealEntryId }) { meal ->
-                MealRow(
-                    meal = meal,
-                    onDelete = { viewModel.deleteMeal(meal.mealEntryId) }
+            items(mealTypes, key = { it }) { mealType ->
+                val mealGroup = groupedMeals[mealType].orEmpty()
+                ExpandableMealSection(
+                    mealType = mealType,
+                    meals = mealGroup,
+                    expanded = expandedMealSections.contains(mealType),
+                    onToggleExpanded = {
+                        expandedMealSections = if (expandedMealSections.contains(mealType)) {
+                            expandedMealSections - mealType
+                        } else {
+                            expandedMealSections + mealType
+                        }
+                    },
+                    onSelectMealType = { selectedMealType = mealType },
+                    onDelete = { entryId -> viewModel.deleteMeal(entryId) }
                 )
             }
         }
@@ -653,11 +695,103 @@ fun NutritionRoute(
 }
 
 @Composable
-private fun MacroTile(
+private fun NutritionCommandHeader(
+    dateLabel: String,
+    totalCalories: Double,
+    leftCalories: Double,
+    progress: Float,
+    offlineCount: Int
+) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 360),
+        label = "nutrition_progress"
+    )
+    val animatedPercent by animateIntAsState(
+        targetValue = (animatedProgress * 100f).roundToInt(),
+        animationSpec = tween(durationMillis = 360),
+        label = "nutrition_percent"
+    )
+    val animatedCalories by animateIntAsState(
+        targetValue = totalCalories.roundToInt(),
+        animationSpec = tween(durationMillis = 360),
+        label = "nutrition_calories"
+    )
+    val animatedLeft by animateIntAsState(
+        targetValue = leftCalories.roundToInt(),
+        animationSpec = tween(durationMillis = 360),
+        label = "nutrition_left"
+    )
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.93f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Nutrition Command", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(dateLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
+                }
+                Text(
+                    "$animatedPercent%",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "$animatedCalories eaten",
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "$animatedLeft left",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            LinearProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            )
+            Text(
+                "USDA online + offline backup ($offlineCount)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun MacroProgressTile(
     title: String,
-    value: String,
+    value: Double,
+    goal: Double,
     modifier: Modifier = Modifier
 ) {
+    val ratio = if (goal <= 0.0) 0f else (value / goal).toFloat().coerceIn(0f, 1f)
+    val animatedRatio by animateFloatAsState(
+        targetValue = ratio,
+        animationSpec = tween(durationMillis = 320),
+        label = "macro_ratio_$title"
+    )
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
@@ -668,14 +802,228 @@ private fun MacroTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
-            Text(value, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "${value.roundToInt()}g / ${goal.roundToInt()}g",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            LinearProgressIndicator(
+                progress = { animatedRatio },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.68f)
+            )
         }
     }
 }
 
+@Composable
+private fun MealSlotCard(
+    title: String,
+    selected: Boolean,
+    mealCount: Int,
+    calories: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
+        },
+        animationSpec = tween(durationMillis = 220),
+        label = "meal_slot_bg_$title"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+        } else {
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        },
+        animationSpec = tween(durationMillis = 220),
+        label = "meal_slot_border_$title"
+    )
+    Card(
+        modifier = modifier.animateContentSize(animationSpec = tween(220)),
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("$calories kcal", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            Text("$mealCount items", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+private fun ExpandableMealSection(
+    mealType: String,
+    meals: List<MealEntry>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onSelectMealType: () -> Unit,
+    onDelete: (Long) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = tween(durationMillis = 220)),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(mealType, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "${meals.sumOf { it.calories }.roundToInt()} kcal  |  ${meals.size} items",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+                FilledTonalButton(
+                    onClick = onSelectMealType,
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Select") }
+                IconButton(onClick = onToggleExpanded) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Collapse" else "Expand"
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(animationSpec = tween(durationMillis = 180)) +
+                    expandVertically(animationSpec = tween(durationMillis = 220)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 140)) +
+                    shrinkVertically(animationSpec = tween(durationMillis = 180))
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (meals.isEmpty()) {
+                        Text(
+                            "No entries in $mealType yet.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        meals.forEach { meal ->
+                            MealRowCompact(meal = meal, onDelete = { onDelete(meal.mealEntryId) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+private fun MealRowCompact(
+    meal: MealEntry,
+    onDelete: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        tonalElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FoodThumb(
+                foodName = meal.foodName,
+                modifier = Modifier.size(44.dp)
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(meal.foodName, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "${meal.grams.roundToInt()}g  |  ${meal.calories.roundToInt()} kcal  |  P ${meal.protein.roundToInt()} C ${meal.carbs.roundToInt()} F ${meal.fat.roundToInt()}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete")
+            }
+        }
+    }
+}
+@Composable
+private fun FoodThumb(
+    foodName: String,
+    modifier: Modifier = Modifier
+) {
+    val imageUrl = remember(foodName) { FoodImageResolver.imageUrlFor(foodName) }
+    val shape = RoundedCornerShape(12.dp)
+    if (imageUrl != null) {
+        SubcomposeAsyncImage(
+            model = imageUrl,
+            contentDescription = foodName,
+            modifier = modifier
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+            contentScale = ContentScale.Crop,
+            loading = {
+                FoodThumbFallback(foodName = foodName, shape = shape)
+            },
+            error = {
+                FoodThumbFallback(foodName = foodName, shape = shape)
+            }
+        )
+    } else {
+        FoodThumbFallback(foodName = foodName, modifier = modifier, shape = shape)
+    }
+}
+
+@Composable
+private fun FoodThumbFallback(
+    foodName: String,
+    modifier: Modifier = Modifier,
+    shape: RoundedCornerShape = RoundedCornerShape(12.dp)
+) {
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = foodName.firstOrNull()?.uppercase() ?: "F",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
 private tailrec fun Context.findActivity(): Activity? {
     return when (this) {
         is Activity -> this
@@ -723,67 +1071,6 @@ private fun TinyBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
 }
 
 @Composable
-private fun MealTypeSummaryCard(mealType: String, mealCount: Int, calories: Int) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            Text(mealType, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-            Text(
-                "$calories kcal",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "$mealCount items",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
-    }
-}
-
-@Composable
-private fun MealRow(
-    meal: MealEntry,
-    onDelete: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(meal.foodName, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Text(
-                    "${meal.mealType}  |  ${meal.grams.roundToInt()}g  |  ${"%.1f".format(meal.calories)} kcal  |  P ${"%.1f".format(meal.protein)} C ${"%.1f".format(meal.carbs)} F ${"%.1f".format(meal.fat)}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
-            }
-        }
-    }
-}
-
-@Composable
 private fun EmptyCard(text: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -794,3 +1081,4 @@ private fun EmptyCard(text: String) {
         Text(text, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
