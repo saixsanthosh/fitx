@@ -1,0 +1,9 @@
+Imported into Fitx repository for source merge and integration planning.
+
+Original upstream:
+https://github.com/MetrolistGroup/Metrolist
+
+Snapshot commit:
+8cad78ba3bf8b03b6aa3fc920bc003e2843ccdc4
+
+This note was added by Fitx maintainers to track upstream provenance.

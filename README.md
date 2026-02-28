@@ -2,6 +2,20 @@
 
 Fitx is an Android fitness app built with Kotlin + Jetpack Compose, MVVM, Clean Architecture, Room, Hilt, WorkManager, Retrofit, DataStore, Firebase Auth, and Firestore sync.
 
+## Third-party source merge (Metrolist)
+
+Metrolist source code has been merged into this repository under:
+
+- `third_party/metrolist/`
+
+Upstream project:
+
+- https://github.com/MetrolistGroup/Metrolist
+- Upstream commit snapshot: `8cad78ba3bf8b03b6aa3fc920bc003e2843ccdc4`
+- Upstream license: GNU GPL v3 (`third_party/metrolist/LICENSE`)
+
+This folder is kept for source integration and reuse planning. It is not automatically built by Fitx Gradle tasks yet.
+
 ## Free distribution model
 
 Fitx is distributed for free outside Play Store using:
