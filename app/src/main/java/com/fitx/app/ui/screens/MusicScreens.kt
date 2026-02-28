@@ -46,8 +46,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -66,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.fitx.app.ui.components.music.MetrolistBigSeekBar
 import com.fitx.app.ui.viewmodel.MusicTrack
 import com.fitx.app.ui.viewmodel.MusicViewModel
 import com.fitx.app.ui.viewmodel.YouTubePlaylistSummary
@@ -446,16 +445,12 @@ fun MusicNowPlayingRoute(
 
                 val durationMs = state.durationMs.takeIf { it > 0 } ?: 1L
                 val progress = (state.positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-                Slider(
-                    value = progress,
-                    onValueChange = { viewModel.seekTo(it) },
+                MetrolistBigSeekBar(
+                    progressProvider = { progress },
+                    onProgressChange = { viewModel.seekTo(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFFD28CFF),
-                        activeTrackColor = Color(0xFFD28CFF),
-                        inactiveTrackColor = Color(0xFF3B3554)
-                    )
+                    background = Color(0xFF3B3554),
+                    color = Color(0xFFD28CFF)
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
