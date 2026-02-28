@@ -16,6 +16,7 @@ import com.fitx.app.data.local.dao.UserProfileDao
 import com.fitx.app.data.local.dao.WeightDao
 import com.fitx.app.data.local.dao.WorkoutDao
 import com.fitx.app.data.remote.AppUpdateApiService
+import com.fitx.app.data.remote.InternetArchiveApiService
 import com.fitx.app.data.remote.UsdaApiService
 import com.fitx.app.data.remote.YouTubeApiService
 import com.fitx.app.data.repository.AppUpdateRepositoryImpl
@@ -136,6 +137,12 @@ object NetworkModule {
     @Singleton
     fun provideYouTubeApiService(retrofit: Retrofit): YouTubeApiService {
         return retrofit.create(YouTubeApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideInternetArchiveApiService(retrofit: Retrofit): InternetArchiveApiService {
+        return retrofit.create(InternetArchiveApiService::class.java)
     }
 }
 

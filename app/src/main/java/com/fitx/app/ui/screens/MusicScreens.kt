@@ -2,6 +2,9 @@ package com.fitx.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -55,7 +59,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fitx.app.ui.viewmodel.MusicTrack
 import com.fitx.app.ui.viewmodel.MusicViewModel
 import com.fitx.app.ui.viewmodel.YouTubePlaylistSummary
-import kotlin.math.roundToInt
 
 @Composable
 fun MusicRoute(
@@ -64,6 +67,20 @@ fun MusicRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val localSongPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            val fileName = resolveDisplayName(context, uri)
+            viewModel.addLocalTrack(uri = uri.toString(), title = fileName)
+        }
+    }
 
     FitxScreenScaffold {
         Box(
@@ -130,6 +147,50 @@ fun MusicRoute(
                 }
                 item {
                     FeaturedPlaylistCard()
+                }
+                item {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1321)),
+                        border = BorderStroke(1.dp, Color(0xFF2B395C))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("Ad-free sources", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            OutlinedButton(onClick = { localSongPicker.launch(arrayOf("audio/*")) }) {
+                                Icon(Icons.Default.LibraryAdd, contentDescription = null)
+                                Text(" Add Local Song")
+                            }
+                            OutlinedTextField(
+                                value = state.catalogQuery,
+                                onValueChange = { viewModel.onCatalogQueryChanged(it) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("Search free licensed catalog") }
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { viewModel.searchFreeCatalog() }) {
+                                    Text(if (state.catalogLoading) "Searching..." else "Find Free Tracks")
+                                }
+                                Text(
+                                    "Public-domain and Creative Commons audio",
+                                    color = Color(0xFF8EA0C6),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                            if (!state.catalogStatus.isNullOrBlank()) {
+                                Text(
+                                    state.catalogStatus.orEmpty(),
+                                    color = Color(0xFFC0D0F5),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
                 }
                 item {
                     Card(
@@ -259,7 +320,7 @@ private fun YouTubePlaylistRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(playlist.title, color = Color.White, maxLines = 1, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${playlist.channelTitle} • ${playlist.itemCount} videos",
+                    "${playlist.channelTitle} - ${playlist.itemCount} videos",
                     color = Color(0xFFA4B4D8),
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -471,7 +532,11 @@ private fun MusicRow(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(track.title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text("${track.artist} • ${track.durationLabel}", color = Color(0xFF9FAED0), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "${track.artist} - ${track.durationLabel} - ${track.source}",
+                    color = Color(0xFF9FAED0),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             IconButton(onClick = onPlayClick) {
                 Icon(
@@ -536,4 +601,17 @@ private fun formatTime(valueMs: Long): String {
     val min = totalSec / 60
     val sec = totalSec % 60
     return "${min}:${sec.toString().padStart(2, '0')}"
+}
+
+private fun resolveDisplayName(context: android.content.Context, uri: Uri): String {
+    val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
+    return runCatching {
+        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) {
+                return@runCatching cursor.getString(index)
+            }
+        }
+        uri.lastPathSegment?.substringAfterLast('/') ?: "Local Track"
+    }.getOrElse { "Local Track" }
 }

@@ -7,7 +7,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.fitx.app.BuildConfig
+import com.fitx.app.data.remote.InternetArchiveApiService
 import com.fitx.app.data.remote.YouTubeApiService
+import com.fitx.app.data.remote.dto.InternetArchiveFileDto
+import com.google.gson.JsonElement
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -34,7 +37,8 @@ data class MusicTrack(
     val artist: String,
     val category: String,
     val durationLabel: String,
-    val streamUrl: String
+    val streamUrl: String,
+    val source: String = "Library"
 )
 
 data class MusicUiState(
@@ -46,7 +50,10 @@ data class MusicUiState(
     val durationMs: Long = 0L,
     val youtubeInput: String = "",
     val youtubeLibrary: List<YouTubePlaylistSummary> = emptyList(),
-    val youtubeStatus: String? = null
+    val youtubeStatus: String? = null,
+    val catalogQuery: String = "",
+    val catalogStatus: String? = null,
+    val catalogLoading: Boolean = false
 ) {
     val categories: List<String>
         get() = listOf("All") + tracks.map { it.category }.distinct()
@@ -61,17 +68,19 @@ data class MusicUiState(
 @HiltViewModel
 class MusicViewModel @Inject constructor(
     @ApplicationContext context: Context,
-    private val youTubeApiService: YouTubeApiService
+    private val youTubeApiService: YouTubeApiService,
+    private val internetArchiveApiService: InternetArchiveApiService
 ) : ViewModel() {
 
-    private val tracks = listOf(
+    private val starterTracks = listOf(
         MusicTrack(
             id = "1",
             title = "Momentum",
             artist = "Fitx Audio",
             category = "Workout",
             durationLabel = "6:09",
-            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+            source = "Sample"
         ),
         MusicTrack(
             id = "2",
@@ -79,7 +88,8 @@ class MusicViewModel @Inject constructor(
             artist = "Fitx Audio",
             category = "Trending",
             durationLabel = "5:42",
-            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+            source = "Sample"
         ),
         MusicTrack(
             id = "3",
@@ -87,7 +97,8 @@ class MusicViewModel @Inject constructor(
             artist = "Fitx Audio",
             category = "Workout",
             durationLabel = "6:23",
-            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+            source = "Sample"
         ),
         MusicTrack(
             id = "4",
@@ -95,7 +106,8 @@ class MusicViewModel @Inject constructor(
             artist = "Fitx Audio",
             category = "Focus",
             durationLabel = "4:54",
-            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"
+            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+            source = "Sample"
         ),
         MusicTrack(
             id = "5",
@@ -103,7 +115,8 @@ class MusicViewModel @Inject constructor(
             artist = "Fitx Audio",
             category = "Chill",
             durationLabel = "5:15",
-            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+            source = "Sample"
         ),
         MusicTrack(
             id = "6",
@@ -111,23 +124,17 @@ class MusicViewModel @Inject constructor(
             artist = "Fitx Audio",
             category = "New Release",
             durationLabel = "7:01",
-            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3"
+            streamUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+            source = "Sample"
         )
     )
 
     private val player = ExoPlayer.Builder(context).build()
 
-    private val _uiState = MutableStateFlow(
-        MusicUiState(
-            tracks = tracks,
-            selectedCategory = "All"
-        )
-    )
+    private val _uiState = MutableStateFlow(MusicUiState(selectedCategory = "All"))
     val uiState: StateFlow<MusicUiState> = _uiState.asStateFlow()
 
     init {
-        player.setMediaItems(tracks.map { MediaItem.fromUri(it.streamUrl) })
-        player.prepare()
         player.addListener(
             object : Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -143,6 +150,7 @@ class MusicViewModel @Inject constructor(
                 }
             }
         )
+        replaceTrackLibrary(starterTracks)
         viewModelScope.launch {
             while (true) {
                 syncFromPlayer()
@@ -153,6 +161,69 @@ class MusicViewModel @Inject constructor(
 
     fun selectCategory(category: String) {
         _uiState.update { it.copy(selectedCategory = category) }
+    }
+
+    fun onCatalogQueryChanged(value: String) {
+        _uiState.update { it.copy(catalogQuery = value) }
+    }
+
+    fun searchFreeCatalog() {
+        val query = _uiState.value.catalogQuery.trim()
+        if (query.isBlank()) {
+            _uiState.update { it.copy(catalogStatus = "Type a song, artist, or mood to search.", catalogLoading = false) }
+            return
+        }
+        _uiState.update { it.copy(catalogStatus = "Searching free licensed catalog...", catalogLoading = true) }
+        viewModelScope.launch {
+            val fetched = runCatching { fetchArchiveTracks(query) }
+            fetched.fold(
+                onSuccess = { found ->
+                    if (found.isEmpty()) {
+                        _uiState.update {
+                            it.copy(
+                                catalogStatus = "No playable free tracks found for \"$query\".",
+                                catalogLoading = false
+                            )
+                        }
+                    } else {
+                        val merged = mergeTracks(_uiState.value.tracks, found)
+                        replaceTrackLibrary(merged)
+                        _uiState.update {
+                            it.copy(
+                                catalogStatus = "Added ${found.size} free tracks to your library.",
+                                catalogLoading = false,
+                                catalogQuery = ""
+                            )
+                        }
+                    }
+                },
+                onFailure = {
+                    _uiState.update {
+                        it.copy(
+                            catalogStatus = "Catalog search failed. Check internet and try again.",
+                            catalogLoading = false
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun addLocalTrack(uri: String, title: String?) {
+        if (uri.isBlank()) return
+        val cleanTitle = title?.trim().orEmpty().ifBlank { "Local Track" }
+        val localTrack = MusicTrack(
+            id = "local_${System.currentTimeMillis()}",
+            title = cleanTitle,
+            artist = "On device",
+            category = "Local",
+            durationLabel = "--:--",
+            streamUrl = uri,
+            source = "Local"
+        )
+        val merged = mergeTracks(_uiState.value.tracks, listOf(localTrack))
+        replaceTrackLibrary(merged)
+        _uiState.update { it.copy(catalogStatus = "Added local song: $cleanTitle") }
     }
 
     fun onYouTubeInputChanged(value: String) {
@@ -207,7 +278,8 @@ class MusicViewModel @Inject constructor(
     }
 
     fun playTrack(track: MusicTrack) {
-        val index = tracks.indexOfFirst { it.id == track.id }
+        val currentTracks = _uiState.value.tracks
+        val index = currentTracks.indexOfFirst { it.id == track.id }
         if (index >= 0) {
             player.seekTo(index, 0L)
             player.playWhenReady = true
@@ -249,14 +321,114 @@ class MusicViewModel @Inject constructor(
     private fun syncFromPlayer() {
         val currentDuration = player.duration.takeIf { it > 0 } ?: 0L
         val mediaIndex = player.currentMediaItemIndex
+        val trackCount = _uiState.value.tracks.size
         _uiState.update { current ->
             current.copy(
-                currentIndex = if (mediaIndex in tracks.indices) mediaIndex else current.currentIndex,
+                currentIndex = if (mediaIndex in 0 until trackCount) mediaIndex else current.currentIndex,
                 isPlaying = player.isPlaying,
                 positionMs = player.currentPosition.coerceAtLeast(0L),
                 durationMs = currentDuration
             )
         }
+    }
+
+    private suspend fun fetchArchiveTracks(query: String): List<MusicTrack> {
+        val encoded = URLEncoder.encode("$query AND mediatype:(audio)", StandardCharsets.UTF_8.toString())
+        val searchUrl =
+            "https://archive.org/advancedsearch.php?q=$encoded&fl[]=identifier&fl[]=title&fl[]=creator&rows=10&page=1&output=json"
+        val docs = internetArchiveApiService.searchByUrl(searchUrl).response.docs
+        val tracks = mutableListOf<MusicTrack>()
+        for (doc in docs) {
+            val identifier = doc.identifier?.trim().orEmpty()
+            if (identifier.isBlank()) continue
+            val metadataUrl = "https://archive.org/metadata/$identifier"
+            val metadata = runCatching { internetArchiveApiService.fetchMetadataByUrl(metadataUrl) }.getOrNull() ?: continue
+            val audioFile = pickAudioFile(metadata.files) ?: continue
+            val artist = parseCreator(doc.creator).ifBlank { "Internet Archive" }
+            val baseTitle = doc.title?.trim().orEmpty().ifBlank { audioFile.name.substringBeforeLast(".") }
+            val streamName = URLEncoder.encode(audioFile.name, StandardCharsets.UTF_8.toString())
+                .replace("+", "%20")
+            tracks += MusicTrack(
+                id = "ia_${identifier}_${audioFile.name}",
+                title = baseTitle,
+                artist = artist,
+                category = "Free Catalog",
+                durationLabel = formatDurationLabel(audioFile.length),
+                streamUrl = "https://archive.org/download/$identifier/$streamName",
+                source = "Archive"
+            )
+        }
+        return tracks
+    }
+
+    private fun replaceTrackLibrary(newTracks: List<MusicTrack>) {
+        val wasPlaying = player.isPlaying
+        val lastPosition = player.currentPosition.coerceAtLeast(0L)
+        val currentTrackId = _uiState.value.currentTrack?.id
+        val keepIndex = currentTrackId?.let { id -> newTracks.indexOfFirst { it.id == id } } ?: -1
+        val mediaItems = newTracks.map { MediaItem.fromUri(it.streamUrl) }
+        player.setMediaItems(mediaItems)
+        if (keepIndex >= 0) {
+            player.seekTo(keepIndex, lastPosition)
+        }
+        player.prepare()
+        player.playWhenReady = wasPlaying && keepIndex >= 0
+
+        _uiState.update { current ->
+            val selectedCategory = current.selectedCategory
+            val normalizedCategory = if (
+                selectedCategory == "All" ||
+                newTracks.any { it.category == selectedCategory }
+            ) {
+                selectedCategory
+            } else {
+                "All"
+            }
+            current.copy(
+                tracks = newTracks,
+                currentIndex = if (keepIndex >= 0) keepIndex else -1,
+                selectedCategory = normalizedCategory
+            )
+        }
+        syncFromPlayer()
+    }
+
+    private fun mergeTracks(current: List<MusicTrack>, incoming: List<MusicTrack>): List<MusicTrack> {
+        return (incoming + current).distinctBy { it.id }
+    }
+
+    private fun pickAudioFile(files: List<InternetArchiveFileDto>): InternetArchiveFileDto? {
+        val preferred = files.firstOrNull { file ->
+            val name = file.name.lowercase()
+            val format = file.format?.lowercase().orEmpty()
+            (name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".ogg") || name.endsWith(".flac")) &&
+                !name.endsWith(".xml") &&
+                !name.contains("thumb")
+                && (format.contains("mp3") || format.contains("mpeg") || format.contains("ogg") || format.contains("flac") || format.contains("vbr"))
+        }
+        return preferred ?: files.firstOrNull { file ->
+            val name = file.name.lowercase()
+            name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".ogg") || name.endsWith(".flac")
+        }
+    }
+
+    private fun parseCreator(creator: JsonElement?): String {
+        if (creator == null || creator.isJsonNull) return ""
+        if (creator.isJsonPrimitive) return creator.asString
+        if (creator.isJsonArray) {
+            return creator.asJsonArray
+                .mapNotNull { it.takeIf { part -> part.isJsonPrimitive }?.asString }
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
+        }
+        return creator.toString()
+    }
+
+    private fun formatDurationLabel(length: String?): String {
+        val sec = length?.toDoubleOrNull()?.toInt() ?: return "--:--"
+        val min = sec / 60
+        val rem = sec % 60
+        return "$min:${rem.toString().padStart(2, '0')}"
     }
 
     private fun parsePlaylistId(input: String): String {
