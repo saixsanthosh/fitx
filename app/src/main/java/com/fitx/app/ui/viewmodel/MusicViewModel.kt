@@ -1,23 +1,20 @@
 package com.fitx.app.ui.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import com.fitx.app.BuildConfig
 import com.fitx.app.data.remote.InternetArchiveApiService
 import com.fitx.app.data.remote.YouTubeApiService
 import com.fitx.app.data.remote.dto.InternetArchiveFileDto
+import com.fitx.app.service.music.FitxMusicPlaybackManager
+import com.fitx.app.service.music.queue.PlaybackEntry
 import com.google.gson.JsonElement
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
@@ -67,9 +64,9 @@ data class MusicUiState(
 
 @HiltViewModel
 class MusicViewModel @Inject constructor(
-    @ApplicationContext context: Context,
     private val youTubeApiService: YouTubeApiService,
-    private val internetArchiveApiService: InternetArchiveApiService
+    private val internetArchiveApiService: InternetArchiveApiService,
+    private val playbackManager: FitxMusicPlaybackManager
 ) : ViewModel() {
 
     private val starterTracks = listOf(
@@ -129,32 +126,30 @@ class MusicViewModel @Inject constructor(
         )
     )
 
-    private val player = ExoPlayer.Builder(context).build()
-
     private val _uiState = MutableStateFlow(MusicUiState(selectedCategory = "All"))
     val uiState: StateFlow<MusicUiState> = _uiState.asStateFlow()
 
     init {
-        player.addListener(
-            object : Player.Listener {
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    syncFromPlayer()
-                }
-
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    syncFromPlayer()
-                }
-
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    syncFromPlayer()
-                }
-            }
-        )
         replaceTrackLibrary(starterTracks)
         viewModelScope.launch {
-            while (true) {
-                syncFromPlayer()
-                delay(500L)
+            playbackManager.snapshot.collect { snapshot ->
+                _uiState.update { current ->
+                    val resolvedIndex =
+                        snapshot.currentMediaId
+                            ?.let { mediaId -> current.tracks.indexOfFirst { it.id == mediaId } }
+                            ?: -1
+                    current.copy(
+                        currentIndex =
+                            if (resolvedIndex >= 0) {
+                                resolvedIndex
+                            } else {
+                                current.currentIndex.takeIf { it in current.tracks.indices } ?: -1
+                            },
+                        isPlaying = snapshot.isPlaying,
+                        positionMs = snapshot.positionMs,
+                        durationMs = snapshot.durationMs
+                    )
+                }
             }
         }
     }
@@ -278,58 +273,23 @@ class MusicViewModel @Inject constructor(
     }
 
     fun playTrack(track: MusicTrack) {
-        val currentTracks = _uiState.value.tracks
-        val index = currentTracks.indexOfFirst { it.id == track.id }
-        if (index >= 0) {
-            player.seekTo(index, 0L)
-            player.playWhenReady = true
-            syncFromPlayer()
-        }
+        playbackManager.play(track.id)
     }
 
     fun togglePlayback() {
-        if (player.isPlaying) {
-            player.pause()
-        } else {
-            if (player.currentMediaItemIndex < 0) {
-                player.seekTo(0, 0L)
-            }
-            player.playWhenReady = true
-        }
-        syncFromPlayer()
+        playbackManager.togglePlayback()
     }
 
     fun skipNext() {
-        player.seekToNextMediaItem()
-        player.playWhenReady = true
-        syncFromPlayer()
+        playbackManager.skipNext()
     }
 
     fun skipPrevious() {
-        player.seekToPreviousMediaItem()
-        player.playWhenReady = true
-        syncFromPlayer()
+        playbackManager.skipPrevious()
     }
 
     fun seekTo(fraction: Float) {
-        val duration = player.duration.takeIf { it > 0 } ?: return
-        val clamped = fraction.coerceIn(0f, 1f)
-        player.seekTo((duration * clamped).toLong())
-        syncFromPlayer()
-    }
-
-    private fun syncFromPlayer() {
-        val currentDuration = player.duration.takeIf { it > 0 } ?: 0L
-        val mediaIndex = player.currentMediaItemIndex
-        val trackCount = _uiState.value.tracks.size
-        _uiState.update { current ->
-            current.copy(
-                currentIndex = if (mediaIndex in 0 until trackCount) mediaIndex else current.currentIndex,
-                isPlaying = player.isPlaying,
-                positionMs = player.currentPosition.coerceAtLeast(0L),
-                durationMs = currentDuration
-            )
-        }
+        playbackManager.seekToFraction(fraction)
     }
 
     private suspend fun fetchArchiveTracks(query: String): List<MusicTrack> {
@@ -362,17 +322,20 @@ class MusicViewModel @Inject constructor(
     }
 
     private fun replaceTrackLibrary(newTracks: List<MusicTrack>) {
-        val wasPlaying = player.isPlaying
-        val lastPosition = player.currentPosition.coerceAtLeast(0L)
         val currentTrackId = _uiState.value.currentTrack?.id
+        playbackManager.replaceQueue(
+            entries =
+                newTracks.map { track ->
+                    PlaybackEntry(
+                        id = track.id,
+                        title = track.title,
+                        artist = track.artist,
+                        streamUrl = track.streamUrl
+                    )
+                },
+            keepMediaId = currentTrackId
+        )
         val keepIndex = currentTrackId?.let { id -> newTracks.indexOfFirst { it.id == id } } ?: -1
-        val mediaItems = newTracks.map { MediaItem.fromUri(it.streamUrl) }
-        player.setMediaItems(mediaItems)
-        if (keepIndex >= 0) {
-            player.seekTo(keepIndex, lastPosition)
-        }
-        player.prepare()
-        player.playWhenReady = wasPlaying && keepIndex >= 0
 
         _uiState.update { current ->
             val selectedCategory = current.selectedCategory
@@ -390,7 +353,6 @@ class MusicViewModel @Inject constructor(
                 selectedCategory = normalizedCategory
             )
         }
-        syncFromPlayer()
     }
 
     private fun mergeTracks(current: List<MusicTrack>, incoming: List<MusicTrack>): List<MusicTrack> {
@@ -440,8 +402,5 @@ class MusicViewModel @Inject constructor(
         return match?.groupValues?.getOrNull(1).orEmpty()
     }
 
-    override fun onCleared() {
-        player.release()
-        super.onCleared()
-    }
+    override fun onCleared() = super.onCleared()
 }
