@@ -810,6 +810,7 @@ class NutritionRepositoryImpl @Inject constructor(
     }
 }
 
+private val USE_SYSTEM_THEME_KEY = booleanPreferencesKey("use_system_theme")
 private val DARK_THEME_KEY = booleanPreferencesKey("dark_theme_enabled")
 private val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
 private val HAPTICS_KEY = booleanPreferencesKey("haptics_enabled")
@@ -830,6 +831,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override fun observeSettings(): Flow<SettingsPreferences> {
         return dataStore.data.map { prefs ->
             SettingsPreferences(
+                useSystemTheme = prefs[USE_SYSTEM_THEME_KEY] ?: false,
                 darkTheme = prefs[DARK_THEME_KEY] ?: true,
                 notificationsEnabled = prefs[NOTIFICATIONS_KEY] ?: true,
                 hapticsEnabled = prefs[HAPTICS_KEY] ?: true,
@@ -839,6 +841,10 @@ class SettingsRepositoryImpl @Inject constructor(
                 guestModeEnabled = prefs[GUEST_MODE_KEY] ?: false
             )
         }
+    }
+
+    override suspend fun setUseSystemTheme(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[USE_SYSTEM_THEME_KEY] = enabled }
     }
 
     override suspend fun setDarkTheme(enabled: Boolean) {

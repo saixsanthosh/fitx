@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface SettingsRepository {
     fun observeSettings(): Flow<SettingsPreferences>
+    suspend fun setUseSystemTheme(enabled: Boolean)
     suspend fun setDarkTheme(enabled: Boolean)
     suspend fun setNotifications(enabled: Boolean)
     suspend fun setHaptics(enabled: Boolean)

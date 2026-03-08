@@ -1,6 +1,7 @@
 package com.fitx.app.ui.navigation
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -20,6 +21,8 @@ fun FitxApp(
 ) {
     val settings = settingsViewModel.settings.collectAsStateWithLifecycle().value
     val currentUser = authViewModel.currentUser.collectAsStateWithLifecycle().value
+    val systemDarkTheme = isSystemInDarkTheme()
+    val effectiveDarkTheme = if (settings.useSystemTheme) systemDarkTheme else settings.darkTheme
 
     LaunchedEffect(currentUser?.uid, settings.guestModeEnabled) {
         if (currentUser != null && settings.guestModeEnabled) {
@@ -28,7 +31,7 @@ fun FitxApp(
     }
 
     FitxTheme(
-        darkTheme = settings.darkTheme,
+        darkTheme = effectiveDarkTheme,
         dynamicColor = false
     ) {
         Surface(

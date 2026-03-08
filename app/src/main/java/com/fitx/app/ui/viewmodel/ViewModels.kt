@@ -909,6 +909,12 @@ class SettingsViewModel @Inject constructor(
     private val _systemMessage = MutableStateFlow<String?>(null)
     val systemMessage: StateFlow<String?> = _systemMessage
 
+    fun setUseSystemTheme(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setUseSystemTheme(enabled)
+        }
+    }
+
     fun setTheme(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setDarkTheme(enabled)

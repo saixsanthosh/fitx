@@ -21,6 +21,8 @@ keystore.properties
 
 # Release artifacts (uploaded to GitHub Releases, not committed)
 release-artifacts/
+*.apk
+kotlin-compile.log
 
 # OS files
 .DS_Store
