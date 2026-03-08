@@ -210,9 +210,14 @@ class AppMaintenanceManager @Inject constructor(
 
     private fun hasInternetConnection(): Boolean {
         val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = manager.activeNetwork ?: return false
-        val caps = manager.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = manager.activeNetwork ?: return false
+            val caps = manager.getNetworkCapabilities(network) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } else {
+            @Suppress("DEPRECATION")
+            manager.activeNetworkInfo?.isConnected == true
+        }
     }
 }
 

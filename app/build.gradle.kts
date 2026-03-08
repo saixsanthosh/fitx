@@ -147,6 +147,24 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.navigation:navigation-compose:2.8.4")
+    
+    // Premium Animation Libraries
+    implementation("com.airbnb.android:lottie-compose:6.4.0")
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+    implementation("com.google.accompanist:accompanist-pager:0.34.0")
+    implementation("com.google.accompanist:accompanist-pager-indicators:0.34.0")
+    implementation("com.google.accompanist:accompanist-swiperefresh:0.34.0")
+    
+    // Advanced Charts & Visualizations
+    // Shimmer & Loading Effects
+    implementation("com.valentinilk.shimmer:compose-shimmer:1.3.0")
+    
+    // Particle Effects & Advanced Graphics
+    implementation("androidx.compose.ui:ui-graphics")
+    
+    // Blur & Glass Effects
+    implementation("com.github.skydoves:cloudy:0.1.2")
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
@@ -166,6 +184,8 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.glance:glance:1.1.1")
+    implementation("androidx.glance:glance-appwidget:1.1.1")
 
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")

@@ -75,6 +75,7 @@ class ActivityTrackingService : LifecycleService(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             ACTION_START -> handleStart(intent)
             ACTION_STOP -> handleStop()
