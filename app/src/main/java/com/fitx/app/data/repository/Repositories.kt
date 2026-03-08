@@ -816,6 +816,7 @@ private val HAPTICS_KEY = booleanPreferencesKey("haptics_enabled")
 private val SMART_REMINDERS_KEY = booleanPreferencesKey("smart_reminders_enabled")
 private val SMART_REMINDER_HOUR_KEY = intPreferencesKey("smart_reminder_hour")
 private val HYDRATION_INTERVAL_HOURS_KEY = intPreferencesKey("hydration_interval_hours")
+private val GUEST_MODE_KEY = booleanPreferencesKey("guest_mode_enabled")
 private val CUSTOM_FOODS_KEY = stringPreferencesKey("custom_foods_json")
 private val FAVORITE_FOODS_KEY = stringPreferencesKey("favorite_foods_json")
 private val RECENT_FOODS_KEY = stringPreferencesKey("recent_foods_json")
@@ -834,7 +835,8 @@ class SettingsRepositoryImpl @Inject constructor(
                 hapticsEnabled = prefs[HAPTICS_KEY] ?: true,
                 smartRemindersEnabled = prefs[SMART_REMINDERS_KEY] ?: true,
                 smartReminderHour = prefs[SMART_REMINDER_HOUR_KEY] ?: 8,
-                hydrationIntervalHours = prefs[HYDRATION_INTERVAL_HOURS_KEY] ?: 4
+                hydrationIntervalHours = prefs[HYDRATION_INTERVAL_HOURS_KEY] ?: 4,
+                guestModeEnabled = prefs[GUEST_MODE_KEY] ?: false
             )
         }
     }
@@ -862,6 +864,10 @@ class SettingsRepositoryImpl @Inject constructor(
             prefs[SMART_REMINDER_HOUR_KEY] = safeHour
             prefs[HYDRATION_INTERVAL_HOURS_KEY] = safeInterval
         }
+    }
+
+    override suspend fun setGuestMode(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[GUEST_MODE_KEY] = enabled }
     }
 }
 

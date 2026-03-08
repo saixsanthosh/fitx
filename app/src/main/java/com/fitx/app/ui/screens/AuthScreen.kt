@@ -45,8 +45,8 @@ fun AuthRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
-
     val webClientId = remember(context) { readWebClientId(context) }
+    val googleSignInAvailable = !webClientId.isNullOrBlank()
     val signInClient = remember(context, webClientId) {
         if (webClientId.isNullOrBlank()) {
             null
@@ -144,7 +144,7 @@ fun AuthRoute(
                                 launcher.launch(signInClient.signInIntent)
                             }
                         },
-                        enabled = !uiState.loading,
+                        enabled = !uiState.loading && googleSignInAvailable,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -170,7 +170,7 @@ fun AuthRoute(
 
                     if (webClientId.isNullOrBlank()) {
                         Text(
-                            text = "Missing default_web_client_id. Check Firebase setup.",
+                            text = "Google sign-in is unavailable in this build. Continue offline, or add google-services.json and rebuild.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                             textAlign = TextAlign.Center

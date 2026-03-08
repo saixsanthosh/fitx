@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.fitx.app.BuildConfig
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -82,6 +83,7 @@ fun MusicRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
+    val youtubeImportEnabled = BuildConfig.YOUTUBE_API_KEY.isNotBlank()
     var showSourceTools by remember { mutableStateOf(false) }
     val localSongPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -201,6 +203,7 @@ fun MusicRoute(
                             onYouTubeInputChanged = viewModel::onYouTubeInputChanged,
                             onImportYouTube = viewModel::importYouTubePlaylist,
                             youtubeStatus = state.youtubeStatus,
+                            youtubeImportEnabled = youtubeImportEnabled,
                             onAddLocal = { localSongPicker.launch(arrayOf("audio/*")) }
                         )
                     }
@@ -341,6 +344,7 @@ private fun MusicSourceToolsPanel(
     onYouTubeInputChanged: (String) -> Unit,
     onImportYouTube: () -> Unit,
     youtubeStatus: String?,
+    youtubeImportEnabled: Boolean,
     onAddLocal: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -387,15 +391,24 @@ private fun MusicSourceToolsPanel(
             }
 
             Text("Import YouTube Playlist", color = colors.onSurface, fontWeight = FontWeight.SemiBold)
+            if (!youtubeImportEnabled) {
+                Text(
+                    "YouTube import is unavailable in this build because YOUTUBE_API_KEY is missing.",
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             OutlinedTextField(
                 value = youtubeInput,
                 onValueChange = onYouTubeInputChanged,
+                enabled = youtubeImportEnabled,
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text("Playlist link or ID") }
             )
             OutlinedButton(
                 onClick = onImportYouTube,
+                enabled = youtubeImportEnabled,
                 shape = RoundedCornerShape(14.dp),
                 border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.45f))
             ) {

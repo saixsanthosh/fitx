@@ -10,5 +10,6 @@ interface SettingsRepository {
     suspend fun setHaptics(enabled: Boolean)
     suspend fun setSmartReminders(enabled: Boolean)
     suspend fun setSmartReminderTuning(reminderHour: Int, hydrationIntervalHours: Int)
+    suspend fun setGuestMode(enabled: Boolean)
 }
 

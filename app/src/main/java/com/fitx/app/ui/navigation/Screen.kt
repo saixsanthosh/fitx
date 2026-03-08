@@ -25,5 +25,12 @@ sealed class Screen(val route: String) {
     data object WeeklyInsights : Screen("weekly_insights")
     data object HealthCheck : Screen("health_check")
     data object Settings : Screen("settings")
+    data object UiShowcase : Screen("ui_showcase")
+    data object UiPremiumDashboard : Screen("ui_premium_dashboard")
+    data object UiThemeLab : Screen("ui_theme_lab")
+    data object UiWater : Screen("ui_water")
+    data object UiHealthScore : Screen("ui_health_score")
+    data object UiAchievements : Screen("ui_achievements")
+    data object UiWeeklyReport : Screen("ui_weekly_report")
 }
 

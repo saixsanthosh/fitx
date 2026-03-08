@@ -3,6 +3,7 @@ package com.fitx.app.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import com.fitx.app.BuildConfig
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -101,6 +102,7 @@ fun NutritionRoute(
     val searchMessage by viewModel.searchMessage.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val offlineCount = viewModel.offlineCatalogCount
+    val usdaOnlineEnabled = BuildConfig.USDA_API_KEY.isNotBlank()
     val keyboardController = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -219,6 +221,31 @@ fun NutritionRoute(
                 }
             }
             item {
+                if (!usdaOnlineEnabled) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("Offline Nutrition Mode", fontWeight = FontWeight.Bold)
+                            Text(
+                                "USDA API is not configured in this build. Search uses the offline catalog and custom foods. Barcode lookup is disabled.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -303,6 +330,7 @@ fun NutritionRoute(
                         value = barcodeInput,
                         onValueChange = { barcodeInput = it.filter { c -> c.isDigit() } },
                         label = { Text("Barcode (EAN/UPC)") },
+                        enabled = usdaOnlineEnabled,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                             imeAction = ImeAction.Search
@@ -321,6 +349,7 @@ fun NutritionRoute(
                             viewModel.findFoodByBarcode(barcodeInput)
                             keyboardController?.hide()
                         },
+                        enabled = usdaOnlineEnabled,
                         modifier = Modifier.height(56.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -337,7 +366,7 @@ fun NutritionRoute(
                                 .createScanIntent()
                             barcodeScanLauncher.launch(intent)
                         },
-                        enabled = activity != null,
+                        enabled = activity != null && usdaOnlineEnabled,
                         modifier = Modifier.height(56.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {

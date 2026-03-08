@@ -29,12 +29,14 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel(),
     onBack: () -> Unit,
-    onOpenHealthCheck: () -> Unit
+    onOpenHealthCheck: () -> Unit,
+    onOpenUiShowcase: () -> Unit
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val systemMessage by viewModel.systemMessage.collectAsStateWithLifecycle()
     val authUser by authViewModel.currentUser.collectAsStateWithLifecycle()
+    val syncEnabled = authUser != null
     FitxScreenScaffold(topBar = { ScreenTopBar("Settings", onBack) }) { padding ->
         Column(
             modifier = Modifier
@@ -137,12 +139,20 @@ fun SettingsRoute(
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Cloud Sync", fontWeight = FontWeight.Bold)
                     Text("Pending changes: $pendingSyncCount", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Offline changes are queued and synced when internet is available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (syncEnabled) {
+                            "Offline changes are queued and synced when internet is available."
+                        } else {
+                            "Cloud sync is disabled in offline mode. Your data stays on this phone unless you sign in with Google."
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Button(
                         onClick = { viewModel.syncNow() },
+                        enabled = syncEnabled,
                         modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text("Sync Now")
+                        Text(if (syncEnabled) "Sync Now" else "Sign In Required")
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
@@ -157,6 +167,17 @@ fun SettingsRoute(
                     Button(onClick = { viewModel.shareDiagnostics() }) {
                         Text("Share Diagnostics")
                     }
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("UI Showcase", fontWeight = FontWeight.Bold)
+                    Text("Open the new premium screens that were added during the UI overhaul.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = onOpenUiShowcase) { Text("Open Showcase") }
                 }
             }
             Card(
@@ -187,10 +208,33 @@ fun SettingsRoute(
                         Text("Signed in as", fontWeight = FontWeight.Bold)
                         Text(authUser?.email ?: "Google account", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Button(
-                            onClick = { authViewModel.signOut() },
+                            onClick = {
+                                authViewModel.signOut()
+                                viewModel.setGuestMode(false)
+                            },
                             modifier = Modifier.padding(top = 8.dp)
                         ) {
                             Text("Sign Out")
+                        }
+                    }
+                }
+            } else if (settings.guestModeEnabled) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Offline Mode", fontWeight = FontWeight.Bold)
+                        Text(
+                            "You are using the app without Google sign-in. Online sync will stay disabled until you return to the sign-in screen.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = { viewModel.setGuestMode(false) },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text("Return to Sign In")
                         }
                     }
                 }

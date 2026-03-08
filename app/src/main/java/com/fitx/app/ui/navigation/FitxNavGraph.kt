@@ -66,6 +66,13 @@ import com.fitx.app.ui.screens.PlannerRoute
 import com.fitx.app.ui.screens.ProfileRoute
 import com.fitx.app.ui.screens.SessionDetailRoute
 import com.fitx.app.ui.screens.SettingsRoute
+import com.fitx.app.ui.screens.UiAchievementsRoute
+import com.fitx.app.ui.screens.UiHealthScoreRoute
+import com.fitx.app.ui.screens.UiPremiumDashboardRoute
+import com.fitx.app.ui.screens.UiShowcaseRoute
+import com.fitx.app.ui.screens.UiThemeLabRoute
+import com.fitx.app.ui.screens.UiWaterRoute
+import com.fitx.app.ui.screens.UiWeeklyReportRoute
 import com.fitx.app.ui.screens.WeeklyInsightsRoute
 import com.fitx.app.ui.screens.WeightRoute
 import com.fitx.app.ui.screens.WorkoutRoute
@@ -304,11 +311,41 @@ fun FitxNavGraph(
             composable(Screen.Settings.route) {
                 SettingsRoute(
                     onBack = { navController.popBackStack() },
-                    onOpenHealthCheck = { navController.navigate(Screen.HealthCheck.route) }
+                    onOpenHealthCheck = { navController.navigate(Screen.HealthCheck.route) },
+                    onOpenUiShowcase = { navController.navigate(Screen.UiShowcase.route) }
                 )
             }
             composable(Screen.HealthCheck.route) {
                 HealthCheckRoute(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.UiShowcase.route) {
+                UiShowcaseRoute(
+                    onBack = { navController.popBackStack() },
+                    onOpenPremiumDashboard = { navController.navigate(Screen.UiPremiumDashboard.route) },
+                    onOpenThemeLab = { navController.navigate(Screen.UiThemeLab.route) },
+                    onOpenWater = { navController.navigate(Screen.UiWater.route) },
+                    onOpenHealthScore = { navController.navigate(Screen.UiHealthScore.route) },
+                    onOpenAchievements = { navController.navigate(Screen.UiAchievements.route) },
+                    onOpenWeeklyReport = { navController.navigate(Screen.UiWeeklyReport.route) }
+                )
+            }
+            composable(Screen.UiPremiumDashboard.route) {
+                UiPremiumDashboardRoute(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.UiThemeLab.route) {
+                UiThemeLabRoute(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.UiWater.route) {
+                UiWaterRoute(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.UiHealthScore.route) {
+                UiHealthScoreRoute(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.UiAchievements.route) {
+                UiAchievementsRoute(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.UiWeeklyReport.route) {
+                UiWeeklyReportRoute(onBack = { navController.popBackStack() })
             }
         }
     }

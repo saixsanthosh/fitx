@@ -949,6 +949,12 @@ class SettingsViewModel @Inject constructor(
         cloudSyncScheduler.syncNow()
     }
 
+    fun setGuestMode(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setGuestMode(enabled)
+        }
+    }
+
     fun exportBackup() {
         viewModelScope.launch {
             val result = runCatching { maintenanceManager.exportBackup() }
